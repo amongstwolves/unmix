@@ -170,7 +170,7 @@ export interface ButtonParts {
 /** A 12 x 8 cm poke button with a text label. */
 export function makeButton(text: string, color = '#7c5cff'): ButtonParts {
   const root = new Group();
-  root.name = `button-${text.toLowerCase()}`;
+  root.name = 'button';
   const body = new Mesh(
     new BoxGeometry(0.12, 0.08, 0.025),
     new MeshStandardMaterial({

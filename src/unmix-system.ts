@@ -138,6 +138,7 @@ export class UnmixSystem extends createSystem({
     entity.addComponent(PokeButton, { action: 'play' });
     entity.addComponent(PokeInteractable);
     entity.addComponent(RayInteractable); // pinch from a distance works too
+    parts.root.name = 'main-button';
     this.mainButton = entity;
     this.mainButtonParts = parts;
   }

@@ -1,45 +1,84 @@
-# IWSDK App
+# Unmix
 
-This project uses `iwsdk.config.json` for declarative scene, asset, component,
-XR, and emulator configuration. Application systems remain explicit in
-`src/index.ts`.
+Pull a song apart with your bare hands. Place each part in the room around you.
+Remix by moving sound through space.
+
+A hands-first WebXR stem player built on Meta's Immersive Web SDK (IWSDK) for the
+Meta VR Start Developer Competition 2026. Not affiliated with Teenage Engineering.
+
+## Run it
+
+Needs Node.js 20.19+ and Chrome.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Use the Runtime and Editor controls in the managed browser to switch between
-the running experience and its authored scene.
+`npm run dev` opens a managed Chrome window with IWER, the IWSDK browser emulator
+for a Quest 3 (headset, controllers and hands), so no headset is needed.
 
-## Starter content
+## How it works
 
-The robot and welcome panel are small examples of authored scene content plus
-runtime systems. The robot turns toward the player's head and plays a sound
-when pressed. To remove the robot, delete its scene node, its `RobotSystem`
-registration from `src/index.ts` or `src/index.js`, and its `Robot` registration
-from `src/components.ts` or `src/components.js`; you can then delete the unused
-robot component and system files. To remove the welcome panel, delete its scene
-node and its `PanelSystem` registration from the application entry point.
+- `src/mix-state.ts`: the mix state, the single source of truth. Hands write it;
+  audio and visuals read it. It is plain JSON, so a saved mix is a snapshot.
+- `src/audio-engine.ts`: Web Audio graph per stem (source → low-pass → echo send →
+  gain → HRTF panner → master). All four stems start on the same AudioContext time.
+- `src/unmix-system.ts`: the song sphere, the split, the orbs and the buttons.
+- `src/layout.ts`: where things sit around a seated user (30–60 cm, chest to eye
+  height, 8 arc slots for orbs).
+- `src/tracks.ts` and `src/placeholder-stems.ts`: track loading, plus generated
+  placeholder stems.
 
-The robot stands on the second of three numbered stations. The first holds dark
-pieces you can grab and move, and the third holds a ring you can spin in place.
-The studio props (the plinths and the dark pieces, plus the floor and stage in VR
-and Desktop 3D) are built in code in `src/scene-assets/studio.scene-asset.ts` or
-`.js`. The VR and Desktop 3D background furniture is built the same way in
-`src/scene-assets/decor.scene-asset.ts` or `.js`, so the starter downloads no
-extra models. To remove any of them, delete their scene nodes and their entries
-in `src/assets.ts` or `src/assets.js`, then delete the files you no longer use.
-The station labels are `public/ui/label-*.uikitml`.
+## Add a track
 
-The rest of the look is built-in components in the scene, which you can edit in
-the editor without code. The soft light on every object is the scene root's
-`IBLGradient` (select the Level Root to edit it), and the soft shadows under
-each object are `ContactShadow` nodes. In VR and Desktop 3D, the sky is the
-scene root's `DomeGradient` (its colors, tilt and dither are also on the Level
-Root), and the floor fades into it through the `DomeFade` on the floor node. AR
-projects have no sky or floor, so passthrough stays visible, and a
-`ShadowCatcher` node grounds the stations.
+1. Split the song into 4 stems offline with Demucs (htdemucs, 44.1 kHz):
 
-- Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
-- XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+   ```sh
+   demucs -n htdemucs --mp3 "my-song.wav"
+   ```
+
+   You get `vocals`, `drums`, `bass` and `other`. Check that they line up and sum
+   back to the original.
+
+2. Make a folder `public/tracks/<track-id>/` (lowercase, dashes, for example
+   `night-drive`) and copy the four stems into it. Compressed audio (`.mp3`, `.ogg`
+   or `.m4a`) keeps the download small. All four must be the same length.
+
+3. Add `public/tracks/<track-id>/track.json`:
+
+   ```json
+   {
+     "id": "night-drive",
+     "title": "Night Drive",
+     "artist": "Artist Name",
+     "license": "CC-BY-4.0",
+     "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+     "bpm": 96,
+     "key": "F minor",
+     "stems": {
+       "vocals": "vocals.mp3",
+       "drums": "drums.mp3",
+       "bass": "bass.mp3",
+       "other": "other.mp3"
+     },
+     "sections": [
+       { "id": "intro", "label": "Intro", "start": 0, "end": 12.5 },
+       { "id": "chorus", "label": "Chorus", "start": 12.5, "end": 37.5 }
+     ]
+   }
+   ```
+
+   Section times are seconds from the start of the stems. Only use music whose
+   license allows modification, or your own recordings.
+
+4. For now the app loads one track: set `DEFAULT_TRACK` in
+   `src/unmix-system.ts` to your track id. A track shelf comes later.
+
+A stem file that fails to load is replaced by a placeholder tone and a warning
+appears in the console, so a typo never silences the demo. The `placeholder`
+track (`"placeholder": true`) generates all four stems in the browser.
+
+## Credits
+
+- Placeholder loop: generated in code, CC0.
