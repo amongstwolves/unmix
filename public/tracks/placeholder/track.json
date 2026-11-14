@@ -1,0 +1,13 @@
+{
+  "id": "placeholder",
+  "title": "Placeholder Loop",
+  "artist": "Unmix (generated tones)",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "bpm": 100,
+  "key": "A minor",
+  "placeholder": true,
+  "sections": [
+    { "id": "loop", "label": "Loop", "start": 0, "end": 9.6 }
+  ]
+}

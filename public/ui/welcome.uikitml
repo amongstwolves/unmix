@@ -60,10 +60,10 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="eyebrow">IMMERSIVE WEB SDK</div>
-    <div class="heading">Hello, Immersive Web!</div>
-    <div class="body">Try each station around you,</div>
-    <div class="body">then make this scene your own.</div>
+    <div class="eyebrow">UNMIX</div>
+    <div class="heading">Pull a song apart.</div>
+    <div class="body">Grab the sphere with both hands</div>
+    <div class="body">and pull. Place each part around you.</div>
   </div>
   <Button id="xr-button" class="button">
     <ButtonIcon>
