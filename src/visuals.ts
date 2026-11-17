@@ -44,7 +44,14 @@ function labelTexture(text: string, width = 512, height = 128, bg?: string): Can
     g.fillStyle = bg;
     g.fillRect(0, 0, width, height);
   }
-  g.font = `700 ${Math.round(height * 0.5)}px system-ui, -apple-system, sans-serif`;
+  // Shrink long text until it fits the label.
+  let size = Math.round(height * 0.5);
+  const fontFor = (px: number) => `700 ${px}px system-ui, -apple-system, sans-serif`;
+  g.font = fontFor(size);
+  while (size > 12 && g.measureText(text).width > width * 0.92) {
+    size -= 2;
+    g.font = fontFor(size);
+  }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = height * 0.08;
@@ -166,6 +173,8 @@ export interface ButtonOptions {
   width?: number;
   height?: number;
   color?: string;
+  /** 0..1; below 1 lets what is behind the button show through. */
+  opacity?: number;
 }
 
 /** A poke button with a text label. Default 12 x 8 cm. */
@@ -182,6 +191,8 @@ export function makeButton(text: string, options: ButtonOptions = {}): ButtonPar
       emissive: baseColor.clone(),
       emissiveIntensity: 0.25,
       roughness: 0.5,
+      transparent: (options.opacity ?? 1) < 1,
+      opacity: options.opacity ?? 1,
     }),
   );
   root.add(body);

@@ -79,6 +79,8 @@ const FUSE_DISTANCE = ORB_RADIUS * 2 + 0.02;
 /** Tabs float this far below their orb. */
 const TAB_DROP = 0.15;
 const MERGE_SECONDS = 0.6;
+/** Orbs must stay pushed together this long to fuse (not just pass by). */
+const FUSE_HOLD_SECONDS = 0.4;
 const FILTER_STEP = 0.15;
 const ECHO_ON = 0.45;
 const MIXDOWN_COLOR = '#7c5cff';
@@ -139,6 +141,9 @@ export class UnmixSystem extends createSystem({
   private sphereEntity!: Entity;
   private pullBaseline: number | null = null;
   private mergeTimer = 0;
+  private fuseTimer = 0;
+  /** Where the held orb was when grabbed, so a fuse can put it back. */
+  private grabStart: { stem: StemId; position: [number, number, number]; slot: number | null } | null = null;
 
   private trackTiles: Button[] = [];
   private wholeRow!: { split: Button; restore: Button; tracks: Button };
@@ -265,6 +270,7 @@ export class UnmixSystem extends createSystem({
           width: 0.19,
           height: 0.08,
           color: '#2b2f3a',
+          opacity: 0.8,
         }),
       );
     }
@@ -451,12 +457,13 @@ export class UnmixSystem extends createSystem({
   mixDown(): void {
     if (this.state.phase !== 'split' || this.mergeTimer > 0) return;
     if (this.pending) this.keepSuggestion();
+    // Set first: releasing the orbs below must not re-place them.
+    this.mergeTimer = MERGE_SECONDS;
     for (const { orb, tab } of this.orbRecords.values()) {
       this.grab.forceRelease(orb);
       if (orb.hasComponent(OneHandGrabbable)) orb.removeComponent(OneHandGrabbable);
       this.setShown(tab, false);
     }
-    this.mergeTimer = MERGE_SECONDS;
     this.saveMix();
     this.engine.click(0.6);
     this.refreshUi();
@@ -498,7 +505,10 @@ export class UnmixSystem extends createSystem({
     this.engine.unlock();
     this.engine.click(1.2);
     const stem = entity.getValue(StemOrb, 'stem') as StemId;
-    this.state.stems[stem].slot = null;
+    const s = this.state.stems[stem];
+    this.grabStart = { stem, position: [...s.position], slot: s.slot };
+    s.slot = null;
+    this.fuseTimer = 0;
     this.selected = stem; // grabbing an orb selects it for the panel
     this.refreshUi();
   }
@@ -653,7 +663,7 @@ export class UnmixSystem extends createSystem({
     if (hasChips) {
       if (this.pending) {
         this.setAction(this.chips[0], 'none');
-        this.chips[0].parts.setLabel(`✓ ${this.pending.suggestion.label}`);
+        this.chips[0].parts.setLabel(this.pending.suggestion.label);
         this.setAction(this.chips[1], 'keep');
         this.chips[1].parts.setLabel('Keep');
         this.setAction(this.chips[2], 'undo');
@@ -844,18 +854,36 @@ export class UnmixSystem extends createSystem({
       return;
     }
 
-    // Recombine: push a held orb into another one.
+    // Recombine: hold a grabbed orb pushed into another one.
+    let touching: StemId | null = null;
     if (heldStem) {
       const held = this.state.stems[heldStem].position;
       for (const id of STEM_IDS) {
         if (id === heldStem) continue;
         const p = this.state.stems[id].position;
-        const d = Math.hypot(p[0] - held[0], p[1] - held[1], p[2] - held[2]);
-        if (d < FUSE_DISTANCE) {
-          this.mixDown();
-          return;
+        if (Math.hypot(p[0] - held[0], p[1] - held[1], p[2] - held[2]) < FUSE_DISTANCE) {
+          touching = id;
+          break;
         }
       }
+    }
+    if (!touching || !heldStem) {
+      this.fuseTimer = 0;
+      return;
+    }
+    this.fuseTimer += delta;
+    // Warn with a growing pulse on the orb about to absorb it.
+    const target = this.orbRecords.get(touching)?.orb.object3D;
+    if (target) (target.userData.visual as OrbVisual).pulse = Math.min(1, this.fuseTimer / FUSE_HOLD_SECONDS);
+    if (this.fuseTimer >= FUSE_HOLD_SECONDS) {
+      // Save the pushed orb where it came from, not on top of its neighbor.
+      const start = this.grabStart;
+      if (start && start.stem === heldStem) {
+        this.state.stems[heldStem].position = start.position;
+        this.state.stems[heldStem].slot = start.slot;
+      }
+      this.fuseTimer = 0;
+      this.mixDown();
     }
   }
 
