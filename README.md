@@ -18,13 +18,32 @@ npm run dev
 `npm run dev` opens a managed Chrome window with IWER, the IWSDK browser emulator
 for a Quest 3 (headset, controllers and hands), so no headset is needed.
 
+## Using it
+
+1. Poke a record tile to load a song into the sphere.
+2. Grab the sphere with both hands and pull them apart (or poke **Split**).
+3. Grab an orb to move a stem around you. Where it is, is where you hear it.
+4. Grab an orb or poke the name tab under it to select that stem, then use the
+   panel: Mute, Solo, Darker, Brighter, Echo, Pitch − / + (pitch also changes
+   speed; one stem at a time).
+5. Poke a producer chip to try an idea, then Keep or Undo.
+6. Hold one orb pushed into another for a moment (or poke **Mix down**) to fuse
+   them back into one song. This saves the mix; **Saved mix** brings it back.
+
+The strip above the chips shows the whole track, one lane per stem, with a
+playhead per lane. Each orb carries its own small waveform.
+
 ## How it works
 
 - `src/mix-state.ts`: the mix state, the single source of truth. Hands write it;
   audio and visuals read it. It is plain JSON, so a saved mix is a snapshot.
 - `src/audio-engine.ts`: Web Audio graph per stem (source → low-pass → echo send →
   gain → HRTF panner → master). All four stems start on the same AudioContext time.
-- `src/unmix-system.ts`: the song sphere, the split, the orbs and the buttons.
+- `src/unmix-system.ts`: the song sphere, the split, the orbs, the buttons, the
+  producer chips, recombine and the saved mix.
+- `src/mix-actions.ts`: every allowed change to the mix, shared by buttons and
+  the producer, plus validation of producer suggestions.
+- `src/waveform.ts`: the full-track strip and per-orb waveforms.
 - `src/layout.ts`: where things sit around a seated user (30–60 cm, chest to eye
   height, 8 arc slots for orbs).
 - `src/tracks.ts` and `src/placeholder-stems.ts`: track loading, plus generated
@@ -72,8 +91,35 @@ for a Quest 3 (headset, controllers and hands), so no headset is needed.
    Section times are seconds from the start of the stems. Only use music whose
    license allows modification, or your own recordings.
 
-4. For now the app loads one track: set `DEFAULT_TRACK` in
-   `src/unmix-system.ts` to your track id. A track shelf comes later.
+4. Add the track id to `public/tracks/index.json` (shelf order, left to right):
+
+   ```json
+   { "tracks": ["night-drive", "placeholder"] }
+   ```
+
+   Remove `placeholder` once you have real tracks.
+
+5. Optional but recommended: `public/tracks/<track-id>/suggestions.json` with 6
+   producer ideas. The chips show three at a time. Each one must follow the AI
+   producer contract (at most 6 words per label, one sentence per `why`, only
+   allowed actions); invalid entries are skipped.
+
+   ```json
+   [
+     {
+       "label": "Strip it to bass and voice",
+       "why": "Taking out drums and pads shows how the bass and vocal fit.",
+       "actions": [
+         { "type": "mute", "stem": "drums" },
+         { "type": "mute", "stem": "other" }
+       ]
+     }
+   ]
+   ```
+
+   Action types: `move` (stem, slot 0-7, left to right), `setVolume`,
+   `setFilter`, `setEcho` (stem, value 0-1), `setPitch` (stem, value -12..12),
+   `mute`, `solo`, `halfTime` (stem), `loopSection` (sectionId from track.json).
 
 A stem file that fails to load is replaced by a placeholder tone and a warning
 appears in the console, so a typo never silences the demo. The `placeholder`
