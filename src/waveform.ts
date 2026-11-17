@@ -18,7 +18,7 @@ import {
   PlaneGeometry,
   SRGBColorSpace,
 } from '@iwsdk/core';
-import { isStemAudible, type MixState, STEM_IDS, type StemId } from './mix-state.js';
+import { isStemAudible, type MixState, STEM_IDS, type StemId, type TrackStemId } from './mix-state.js';
 import type { LoadedTrack } from './tracks.js';
 import { STEM_COLORS, STEM_LABELS } from './visuals.js';
 
@@ -112,7 +112,7 @@ function drawWave(
 export class WaveformViews {
   /** Full-track strip; position and face it toward the user from outside. */
   readonly strip = new Group();
-  private lanes = new Map<StemId, Lane>();
+  private lanes = new Map<TrackStemId, Lane>();
   private header: Mesh<PlaneGeometry, MeshBasicMaterial>;
   private loopBox: Mesh<PlaneGeometry, MeshBasicMaterial>;
   private orbWaveTextures = new Map<StemId, CanvasTexture>();
@@ -221,6 +221,16 @@ export class WaveformViews {
     this.header.material.needsUpdate = true;
   }
 
+  /** Draw the mini waveform for the user's recorded loop. */
+  setRecordingWave(buffer: AudioBuffer): void {
+    const p = peaks(buffer, 96);
+    let loudest = 0.0001;
+    for (const v of p) if (v > loudest) loudest = v;
+    this.orbWaveTextures.get('you')?.dispose();
+    const texture = canvasTexture(drawWave(p, 1 / loudest, 256, 64, STEM_COLORS.you, null));
+    this.orbWaveTextures.set('you', texture);
+  }
+
   /** A mini waveform to put over an orb. */
   makeOrbWave(stem: StemId): OrbWave {
     const root = new Group();
@@ -249,20 +259,21 @@ export class WaveformViews {
   /** Move playheads and dim muted stems. Call every frame. */
   update(
     state: MixState,
-    playhead: (id: StemId) => number,
+    /** 0..1 position of each stem within its own length. */
+    fraction: (id: StemId) => number,
     orbWaves: Iterable<[StemId, OrbWave]>,
   ): void {
     const d = this.duration;
     for (const id of STEM_IDS) {
       const lane = this.lanes.get(id)!;
-      const t = Math.min(1, Math.max(0, playhead(id) / d));
+      const t = fraction(id);
       lane.playhead.position.x = -STRIP_WIDTH / 2 + t * STRIP_WIDTH;
       const opacity = isStemAudible(state, id) ? 1 : 0.25;
       lane.plane.material.opacity = opacity;
       lane.playhead.material.opacity = opacity;
     }
     for (const [id, wave] of orbWaves) {
-      const t = Math.min(1, Math.max(0, playhead(id) / d));
+      const t = fraction(id);
       wave.playhead.position.x = -ORB_WAVE_WIDTH / 2 + t * ORB_WAVE_WIDTH;
       const opacity = isStemAudible(state, id) ? 1 : 0.25;
       wave.plane.material.opacity = opacity;

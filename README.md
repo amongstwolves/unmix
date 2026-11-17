@@ -27,7 +27,12 @@ for a Quest 3 (headset, controllers and hands), so no headset is needed.
    panel: Mute, Solo, Darker, Brighter, Echo, Pitch − / + (pitch also changes
    speed; one stem at a time).
 5. Poke a producer chip to try an idea, then Keep or Undo.
-6. Hold one orb pushed into another for a moment (or poke **Mix down**) to fuse
+6. Poke **Record** (it sits at a free spot on the orb arc) to add your own
+   sound: you hear a count-in, then it records two bars from your microphone
+   and loops them in time with the song as a fifth orb, **YOU**. Poke
+   **Re-record** to replace the take. The recording is kept for this track
+   until you load another one.
+7. Hold one orb pushed into another for a moment (or poke **Mix down**) to fuse
    them back into one song. This saves the mix; **Saved mix** brings it back.
 
 The strip above the chips shows the whole track, one lane per stem, with a
@@ -44,6 +49,10 @@ playhead per lane. Each orb carries its own small waveform.
 - `src/mix-actions.ts`: every allowed change to the mix, shared by buttons and
   the producer, plus validation of producer suggestions.
 - `src/waveform.ts`: the full-track strip and per-orb waveforms.
+- `src/recorder.ts`: records a loop from the microphone in an AudioWorklet,
+  lined up to the bar grid and corrected for audio latency. Add `?fakemic` to
+  the URL (or set localStorage `unmix.fakemic` to `1`) to test with a generated
+  signal instead of a microphone.
 - `src/layout.ts`: where things sit around a seated user (30–60 cm, chest to eye
   height, 8 arc slots for orbs).
 - `src/tracks.ts` and `src/placeholder-stems.ts`: track loading, plus generated

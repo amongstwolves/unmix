@@ -37,6 +37,7 @@ import {
   validateSuggestion,
 } from './mix-actions.js';
 import {
+  ALL_STEMS,
   createMixState,
   isStemAudible,
   type MixState,
@@ -66,6 +67,7 @@ import {
   type TextPlane,
 } from './visuals.js';
 import { ORB_WAVE_RISE, type OrbWave, WaveformViews } from './waveform.js';
+import { LoopRecorder, type MicError } from './recorder.js';
 
 /** Hands must spread this much farther apart than where the grab began. */
 const SPLIT_PULL_METERS = 0.25;
@@ -86,6 +88,9 @@ const FILTER_STEP = 0.15;
 const ECHO_ON = 0.45;
 const MIXDOWN_COLOR = '#7c5cff';
 const SAVED_KEY = (trackId: string) => `unmix.savedMix.${trackId}`;
+/** Arc slots the Record button (and then the YOU orb) prefers, in order. */
+const RECORD_SLOT_ORDER = [5, 2, 7, 0, 6, 1, 3, 4];
+const RECORD_COLOR = '#d93a3a';
 
 interface OrbVisual {
   parts: GlowParts;
@@ -161,7 +166,16 @@ export class UnmixSystem extends createSystem({
   private waves!: WaveformViews;
   /** Reused every frame for the waveform update (no per-frame allocation). */
   private orbWaveList: [StemId, OrbWave][] = [];
-  private playheadOf = (id: StemId): number => this.engine.getPlayhead(id);
+  private playheadOf = (id: StemId): number => this.engine.getPlayheadFraction(id);
+
+  private recorder!: LoopRecorder;
+  private recordButton!: Button;
+  private recState: 'none' | 'preparing' | 'countin' | 'recording' = 'none';
+  private recStart = 0;
+  private recEnd = 0;
+  /** Bumped when the track changes, so a stale take is thrown away. */
+  private recToken = 0;
+  private recMessage: string | null = null;
 
   // Scratch objects, allocated once.
   private v1 = new Vector3();
@@ -188,6 +202,7 @@ export class UnmixSystem extends createSystem({
     this.createSphere();
     this.createButtons();
     this.waves = new WaveformViews();
+    this.recorder = new LoopRecorder(this.engine.ctx);
     this.world.createTransformEntity(this.waves.strip);
     this.installAudioUnlock();
     void this.loadShelf();
@@ -284,6 +299,12 @@ export class UnmixSystem extends createSystem({
       );
     }
     this.note = this.makeLabel('', 0.62, 0.035, (o) => L.notePosition(o));
+    // Placed at a free arc slot in refreshUi(); the YOU orb appears there.
+    this.recordButton = this.makeBtn('record-button', 'Record', 'record', null, {
+      width: 0.1,
+      height: 0.08,
+      color: RECORD_COLOR,
+    });
     this.pitchCaption = this.makeLabel('PITCH + SPEED', 0.24, 0.022, (o) =>
       L.panelCaptionPosition(1, 2, o),
     );
@@ -349,6 +370,7 @@ export class UnmixSystem extends createSystem({
       case 'select': this.selected = arg as StemId; break;
       case 'mixdown': this.mixDown(); break;
       case 'chip': this.onChip(Number(arg)); break;
+      case 'record': void this.startRecording(); break;
       case 'keep': this.keepSuggestion(); break;
       case 'undo': this.undoSuggestion(); break;
       default: this.onStemControl(verb); break;
@@ -391,7 +413,10 @@ export class UnmixSystem extends createSystem({
 
       // Fresh mix for the new track, keeping the layout anchor.
       const fresh = createMixState();
-      for (const id of STEM_IDS) this.state.stems[id] = fresh.stems[id];
+      for (const id of ALL_STEMS) this.state.stems[id] = fresh.stems[id];
+      this.state.hasRecording = false; // the engine dropped it with the old track
+      this.recToken += 1;
+      this.recState = 'none';
       this.state.trackId = track.info.id;
       this.state.loopSectionId = null;
       this.selected = 'vocals';
@@ -421,6 +446,8 @@ export class UnmixSystem extends createSystem({
   /** Back to the track shelf. Stops the music. */
   private goIdle(): void {
     if (this.state.phase === 'split') this.removeOrbs();
+    this.recToken += 1;
+    this.recState = 'none';
     this.grab.forceRelease(this.sphereEntity);
     this.engine.stop();
     this.pending = null;
@@ -438,33 +465,139 @@ export class UnmixSystem extends createSystem({
     this.sphereEntity.object3D!.getWorldPosition(this.v1);
     this.hideSphere();
 
-    for (const stem of STEM_IDS) {
+    const stems: StemId[] = this.state.hasRecording ? [...ALL_STEMS] : [...STEM_IDS];
+    for (const stem of stems) {
       const s = this.state.stems[stem];
       if (s.slot !== null) s.position = this.layout.slotTuple(s.slot);
-      const parts = makeOrb(stem);
-      parts.root.position.copy(this.v1); // start inside the sphere, then fly out
-      parts.root.scale.setScalar(0.3);
-      const orb = this.world.createTransformEntity(parts.root);
-      orb.addComponent(StemOrb, { stem });
-      orb.addComponent(OneHandGrabbable, { rotate: false, translate: true });
-      parts.root.userData.visual = { parts, pulse: 1 } satisfies OrbVisual;
-
-      const tab = this.makeBtn(`tab-${stem}`, STEM_LABELS[stem], `select:${stem}`, null, {
-        width: 0.1,
-        height: 0.08,
-        color: STEM_COLORS[stem],
-      });
-      this.setShown(tab, true);
-      const wave = this.waves.makeOrbWave(stem);
-      wave.root.position.copy(this.v1);
-      const waveEntity = this.world.createTransformEntity(wave.root);
-      this.orbRecords.set(stem, { orb, tab, wave, waveEntity });
+      this.createOrb(stem, this.v1); // start inside the sphere, then fly out
     }
-    this.orbWaveList = [...this.orbRecords].map(([id, r]) => [id, r.wave]);
 
     this.state.phase = 'split';
     this.engine.burst();
     this.refreshUi();
+  }
+
+  /** One stem orb with its name tab and mini waveform, starting at `from`. */
+  private createOrb(stem: StemId, from: Vector3): void {
+    const parts = makeOrb(stem);
+    parts.root.position.copy(from);
+    parts.root.scale.setScalar(0.3);
+    const orb = this.world.createTransformEntity(parts.root);
+    orb.addComponent(StemOrb, { stem });
+    orb.addComponent(OneHandGrabbable, { rotate: false, translate: true });
+    parts.root.userData.visual = { parts, pulse: 1 } satisfies OrbVisual;
+
+    const tab = this.makeBtn(`tab-${stem}`, STEM_LABELS[stem], `select:${stem}`, null, {
+      width: 0.1,
+      height: 0.08,
+      color: STEM_COLORS[stem],
+    });
+    this.setShown(tab, true);
+    const wave = this.waves.makeOrbWave(stem);
+    wave.root.position.copy(from);
+    const waveEntity = this.world.createTransformEntity(wave.root);
+    this.orbRecords.set(stem, { orb, tab, wave, waveEntity });
+    this.orbWaveList = [...this.orbRecords].map(([id, r]) => [id, r.wave]);
+  }
+
+  // ================================================================ recording
+
+  /**
+   * Record one loop of your own sound: a count-in to the next bar line, then
+   * exactly REC bars. The take loops in time with the song as the YOU orb.
+   */
+  private async startRecording(): Promise<void> {
+    if (this.recState !== 'none' || this.state.phase !== 'split' || !this.engine.isPlaying) return;
+    const token = this.recToken;
+    this.recState = 'preparing';
+    this.recMessage = null;
+    this.refreshUi();
+    try {
+      await this.recorder.prepare(this.engine.beat);
+    } catch (error) {
+      this.recState = 'none';
+      this.recMessage = (error as MicError) === 'denied' ? 'Mic blocked' : 'No mic';
+      console.warn('[unmix] microphone not available:', error);
+      this.refreshUi();
+      return;
+    }
+    if (token !== this.recToken) return;
+
+    const ctx = this.engine.ctx;
+    const bar = this.engine.bar;
+    const bars = bar * 2 <= 10 ? 2 : 1; // keep takes short
+    // At least most of a bar of count-in, starting on a bar line.
+    const start = this.engine.nextBarTime(ctx.currentTime + bar * 0.9);
+    const beat = this.engine.beat;
+    for (let t = start - beat; t > ctx.currentTime + 0.05; t -= beat) {
+      const beatsBefore = Math.round((start - t) / beat);
+      this.engine.scheduleClick(t, beatsBefore % 4 === 0);
+    }
+    this.recStart = start;
+    this.recEnd = start + bars * bar;
+    this.recState = 'countin';
+    this.refreshUi();
+
+    const buffer = await this.recorder.record(start, bars * bar);
+    if (token !== this.recToken) return;
+    this.engine.setRecording(buffer, start);
+    this.waves.setRecordingWave(buffer);
+    const first = !this.state.hasRecording;
+    this.state.hasRecording = true;
+    this.recState = 'none';
+    this.engine.applyMix(this.state);
+
+    const record = this.orbRecords.get('you');
+    if (record) {
+      // Re-record: keep the orb, swap its waveform.
+      record.waveEntity.dispose();
+      const wave = this.waves.makeOrbWave('you');
+      record.wave = wave;
+      record.waveEntity = this.world.createTransformEntity(wave.root);
+      this.orbWaveList = [...this.orbRecords].map(([id, r]) => [id, r.wave]);
+    } else if (this.state.phase === 'split' && this.mergeTimer <= 0) {
+      const you = this.state.stems.you;
+      if (first || you.slot === null) {
+        const slot = this.freeSlot() ?? RECORD_SLOT_ORDER[0];
+        you.slot = slot;
+        you.position = this.layout.slotTuple(slot);
+      }
+      this.recordButton.parts.root.getWorldPosition(this.v1);
+      this.createOrb('you', this.v1);
+      this.selected = 'you';
+    }
+    this.engine.click(1.4);
+    this.refreshUi();
+  }
+
+  /** First free arc slot for the Record button / YOU orb, or null. */
+  private freeSlot(): number | null {
+    for (const slot of RECORD_SLOT_ORDER) {
+      this.layout.slotPosition(slot, this.v2);
+      let taken = false;
+      for (const id of this.orbRecords.keys()) {
+        const p = this.state.stems[id].position;
+        if (this.state.stems[id].slot === slot ||
+            Math.hypot(p[0] - this.v2.x, p[1] - this.v2.y, p[2] - this.v2.z) < 0.12) {
+          taken = true;
+          break;
+        }
+      }
+      if (!taken) return slot;
+    }
+    return null;
+  }
+
+  private recordLabel(): string {
+    const now = this.engine.ctx.currentTime;
+    switch (this.recState) {
+      case 'preparing': return 'Mic…';
+      case 'countin': return now < this.recStart
+        ? String(Math.max(1, Math.ceil((this.recStart - now) / this.engine.beat - 0.01)))
+        : 'Recording';
+      case 'recording': return 'Recording';
+      default: return this.recMessage ?? (this.state.hasRecording ? 'Re-record' : 'Record');
+    }
   }
 
   /** Push the orbs back into one sphere and save the mix. */
@@ -579,7 +712,10 @@ export class UnmixSystem extends createSystem({
 
   /** Copy stem settings and loop from a snapshot into the live state. */
   private copyMix(from: MixState): void {
-    for (const id of STEM_IDS) this.state.stems[id] = JSON.parse(JSON.stringify(from.stems[id]));
+    for (const id of ALL_STEMS) {
+      // Older saved mixes have no "you" stem; keep the live one then.
+      if (from.stems[id]) this.state.stems[id] = JSON.parse(JSON.stringify(from.stems[id]));
+    }
     this.setLoopSection(from.loopSectionId);
     this.engine.applyMix(this.state);
   }
@@ -674,6 +810,18 @@ export class UnmixSystem extends createSystem({
       tab.parts.setActive(id === this.selected);
     }
 
+    // Record button: at a free arc slot, while the orbs are out.
+    const recSlot = split ? this.freeSlot() : null;
+    const recBusy = this.recState !== 'none';
+    this.setShown(this.recordButton, split && (recSlot !== null || recBusy));
+    if (recSlot !== null && !recBusy) {
+      const root = this.recordButton.parts.root;
+      this.layout.slotPosition(recSlot, root.position);
+      this.faceHead(root);
+    }
+    this.recordButton.parts.setLabel(this.recordLabel());
+    this.recordButton.parts.setActive(recBusy);
+
     const hasChips = split && this.suggestions.length > 0;
     this.chips.forEach((chip, i) => this.setShown(chip, hasChips));
     this.note.entity.object3D!.visible = hasChips;
@@ -746,6 +894,13 @@ export class UnmixSystem extends createSystem({
     this.player.gripSpaces.left.getWorldPosition(this.leftHand);
     this.player.gripSpaces.right.getWorldPosition(this.rightHand);
 
+    if (this.recState === 'countin') {
+      // Live count-in numbers, then "Recording" until the take is in.
+      this.recordButton.parts.setLabel(this.recordLabel());
+      const t = this.engine.ctx.currentTime;
+      const flash = t >= this.recStart && Math.floor(t * 3) % 2 === 0;
+      this.recordButton.parts.setActive(!flash);
+    }
     if (this.state.phase === 'split') this.updateOrbs(delta);
     else this.updateSphere(time);
     if (this.state.phase !== 'idle') this.waves.update(this.state, this.playheadOf, this.orbWaveList);
@@ -766,9 +921,9 @@ export class UnmixSystem extends createSystem({
     const { parts } = root.userData.visual as SphereVisual;
     root.getWorldPosition(this.v1);
 
-    // All four stems come from the sphere until it splits.
+    // Every stem comes from the sphere until it splits.
     let level = 0;
-    for (const id of STEM_IDS) {
+    for (const id of ALL_STEMS) {
       this.engine.setStemPosition(id, this.v1.x, this.v1.y, this.v1.z);
       level += this.engine.getLevel(id);
     }
@@ -882,7 +1037,7 @@ export class UnmixSystem extends createSystem({
     let touching: StemId | null = null;
     if (heldStem) {
       const held = this.state.stems[heldStem].position;
-      for (const id of STEM_IDS) {
+      for (const id of this.orbRecords.keys()) {
         if (id === heldStem) continue;
         const p = this.state.stems[id].position;
         if (Math.hypot(p[0] - held[0], p[1] - held[1], p[2] - held[2]) < FUSE_DISTANCE) {

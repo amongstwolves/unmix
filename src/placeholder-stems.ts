@@ -4,7 +4,7 @@
  * stem is the same length, so they stay sample-locked when looped.
  */
 
-import type { StemId } from './mix-state.js';
+import type { TrackStemId as StemId } from './mix-state.js';
 
 const BARS = 4;
 const BEATS_PER_BAR = 4;

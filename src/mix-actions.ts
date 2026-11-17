@@ -6,7 +6,7 @@
  * Also validates producer suggestions against the contract in CLAUDE.md.
  */
 
-import { type MixState, STEM_IDS, type StemId } from './mix-state.js';
+import { ALL_STEMS, type MixState, STEM_IDS, type StemId } from './mix-state.js';
 import { SLOT_COUNT } from './layout.js';
 
 export type MixAction =
@@ -31,7 +31,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /** Only one stem may be pitched at a time (pitch also changes its speed). */
 export function setPitch(state: MixState, stem: StemId, semitones: number): void {
   const value = Math.round(clamp(semitones, -12, 12));
-  for (const id of STEM_IDS) if (id !== stem) state.stems[id].pitch = 0;
+  for (const id of ALL_STEMS) if (id !== stem) state.stems[id].pitch = 0;
   state.stems[stem].pitch = value;
 }
 
@@ -42,7 +42,7 @@ export function toggleMute(state: MixState, stem: StemId): void {
 /** Solo is exclusive: soloing one stem un-solos the others. */
 export function toggleSolo(state: MixState, stem: StemId): void {
   const next = !state.stems[stem].soloed;
-  for (const id of STEM_IDS) state.stems[id].soloed = false;
+  for (const id of ALL_STEMS) state.stems[id].soloed = false;
   state.stems[stem].soloed = next;
 }
 
@@ -70,7 +70,7 @@ export function applyAction(
       state.stems[action.stem].muted = true;
       return null;
     case 'solo':
-      for (const id of STEM_IDS) state.stems[id].soloed = id === action.stem;
+      for (const id of ALL_STEMS) state.stems[id].soloed = id === action.stem;
       return null;
     case 'setFilter':
       state.stems[action.stem].filter = clamp(action.value, 0, 1);
@@ -92,6 +92,7 @@ export function applyAction(
 
 // ------------------------------------------------------------- validation
 
+// Precomputed suggestions only know the four track stems.
 const isStem = (v: unknown): v is StemId =>
   typeof v === 'string' && (STEM_IDS as readonly string[]).includes(v);
 const isNum = (v: unknown, lo: number, hi: number): v is number =>

@@ -10,6 +10,7 @@
  */
 
 import {
+  ALL_STEMS,
   isStemAudible,
   type MixState,
   STEM_IDS,
@@ -45,6 +46,13 @@ export class AudioEngine {
   private track: LoadedTrack | null = null;
   private playing = false;
   private loop: { start: number; end: number } | null = null;
+  /** AudioContext time when the track started: bar 1, beat 1. */
+  private startAt = 0;
+  private barSeconds = 2.4;
+  /** The user's recorded loop (the "you" stem), if any. */
+  private youBuffer: AudioBuffer | null = null;
+  /** An AudioContext time at which the recorded loop is at its start. */
+  private youAlign = 0;
 
   constructor() {
     this.ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -55,7 +63,7 @@ export class AudioEngine {
     this.master.connect(compressor).connect(this.ctx.destination);
 
     const chains = {} as Record<StemId, StemChain>;
-    for (const id of STEM_IDS) chains[id] = this.createChain();
+    for (const id of ALL_STEMS) chains[id] = this.createChain();
     this.chains = chains;
   }
 
@@ -125,9 +133,11 @@ export class AudioEngine {
   setTrack(track: LoadedTrack): void {
     this.stop();
     this.track = track;
+    this.youBuffer = null; // a recording belongs to the track it was made over
     // Echo time follows the tempo: a dotted eighth.
     const beat = 60 / (track.info.bpm || 100);
-    for (const id of STEM_IDS) {
+    this.barSeconds = beat * 4;
+    for (const id of ALL_STEMS) {
       this.chains[id].delay.delayTime.value = Math.min(1.9, beat * 0.75);
     }
   }
@@ -136,6 +146,7 @@ export class AudioEngine {
   play(): void {
     if (!this.track || this.playing) return;
     const startAt = this.ctx.currentTime + 0.1;
+    this.startAt = startAt;
     for (const id of STEM_IDS) {
       const chain = this.chains[id];
       const source = this.ctx.createBufferSource();
@@ -150,6 +161,7 @@ export class AudioEngine {
     }
     this.loop = null;
     this.playing = true;
+    if (this.youBuffer) this.startYou();
   }
 
   /** Loop only part of the track (seconds), or the whole track with null. */
@@ -170,7 +182,7 @@ export class AudioEngine {
   }
 
   stop(): void {
-    for (const id of STEM_IDS) {
+    for (const id of ALL_STEMS) {
       const chain = this.chains[id];
       if (chain.source) {
         chain.source.stop();
@@ -184,7 +196,7 @@ export class AudioEngine {
   /** Apply volume, mute/solo, filter, pitch and echo from the mix state. */
   applyMix(state: MixState): void {
     const now = this.ctx.currentTime;
-    for (const id of STEM_IDS) {
+    for (const id of ALL_STEMS) {
       const stem = state.stems[id];
       const chain = this.chains[id];
       const target = isStemAudible(state, id) ? stem.volume : 0;
@@ -253,8 +265,10 @@ export class AudioEngine {
     if (!this.playing || !buffer) return 0;
     const elapsed = Math.max(0, this.ctx.currentTime - chain.markTime);
     let pos = chain.posAtMark + elapsed * chain.rate;
-    const start = this.loop ? this.loop.start : 0;
-    const end = this.loop ? Math.min(this.loop.end, buffer.duration) : buffer.duration;
+    // Section loops apply to the track stems; the recording loops on its own.
+    const loop = chain === this.chains.you ? null : this.loop;
+    const start = loop ? loop.start : 0;
+    const end = loop ? Math.min(loop.end, buffer.duration) : buffer.duration;
     if (pos >= end && end > start) pos = start + ((pos - start) % (end - start));
     return pos;
   }
@@ -262,6 +276,89 @@ export class AudioEngine {
   /** Where a stem is in the track, in seconds (follows pitch and loops). */
   getPlayhead(id: StemId): number {
     return this.positionOf(this.chains[id]);
+  }
+
+  /** Same as getPlayhead, as 0..1 of that stem's own length. */
+  getPlayheadFraction(id: StemId): number {
+    const length = id === 'you' ? this.youBuffer?.duration : this.duration;
+    return length ? Math.min(1, this.positionOf(this.chains[id]) / length) : 0;
+  }
+
+  // ------------------------------------------------------------ recording
+
+  get bar(): number {
+    return this.barSeconds;
+  }
+
+  get beat(): number {
+    return this.barSeconds / 4;
+  }
+
+  get hasRecording(): boolean {
+    return this.youBuffer !== null;
+  }
+
+  /** The first bar line (AudioContext time) at or after `after`. */
+  nextBarTime(after: number): number {
+    const bars = Math.ceil((after - this.startAt) / this.barSeconds - 1e-6);
+    return this.startAt + bars * this.barSeconds;
+  }
+
+  /**
+   * Use a recorded buffer as the "you" stem. `alignTime` is the AudioContext
+   * time its first sample was recorded at, so it loops in time with the song.
+   */
+  setRecording(buffer: AudioBuffer, alignTime: number): void {
+    this.youBuffer = buffer;
+    this.youAlign = alignTime;
+    if (this.playing) this.startYou();
+  }
+
+  clearRecording(): void {
+    const chain = this.chains.you;
+    if (chain.source) {
+      chain.source.stop();
+      chain.source.disconnect();
+      chain.source = null;
+    }
+    this.youBuffer = null;
+  }
+
+  private startYou(): void {
+    const buffer = this.youBuffer;
+    if (!buffer) return;
+    const chain = this.chains.you;
+    if (chain.source) {
+      chain.source.stop();
+      chain.source.disconnect();
+    }
+    const when = this.ctx.currentTime + 0.05;
+    const length = buffer.duration;
+    // Start mid-loop so it lines up with where the song is now.
+    const offset = (((when - this.youAlign) % length) + length) % length;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.playbackRate.value = chain.rate;
+    source.connect(chain.filter);
+    source.start(when, offset);
+    chain.source = source;
+    chain.posAtMark = offset;
+    chain.markTime = when;
+  }
+
+  /** A metronome tick at an exact time (count-in before recording). */
+  scheduleClick(time: number, accent: boolean): void {
+    const osc = this.ctx.createOscillator();
+    const env = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = accent ? 1760 : 1175;
+    env.gain.setValueAtTime(0.0001, time);
+    env.gain.exponentialRampToValueAtTime(0.25, time + 0.002);
+    env.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
+    osc.connect(env).connect(this.ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.08);
   }
 
   get duration(): number {

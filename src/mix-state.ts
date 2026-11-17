@@ -6,8 +6,12 @@
  * is just a snapshot of this object.
  */
 
+/** The four stems every track has (from Demucs). */
 export const STEM_IDS = ['vocals', 'drums', 'bass', 'other'] as const;
-export type StemId = (typeof STEM_IDS)[number];
+export type TrackStemId = (typeof STEM_IDS)[number];
+/** Track stems plus the user's own recorded layer. */
+export const ALL_STEMS = [...STEM_IDS, 'you'] as const;
+export type StemId = (typeof ALL_STEMS)[number];
 
 export type Vec3Tuple = [number, number, number];
 
@@ -41,6 +45,8 @@ export interface MixState {
   stems: Record<StemId, StemState>;
   /** Section being looped (from track.json), or null for the whole track. */
   loopSectionId: string | null;
+  /** True once the user has recorded their own layer (the "you" stem). */
+  hasRecording: boolean;
 }
 
 /** Default arc slot per stem, left to right as the user sees them. */
@@ -49,11 +55,12 @@ export const DEFAULT_SLOTS: Record<StemId, number> = {
   drums: 3,
   vocals: 4,
   other: 6,
+  you: 5,
 };
 
 export function createMixState(): MixState {
   const stems = {} as Record<StemId, StemState>;
-  for (const id of STEM_IDS) {
+  for (const id of ALL_STEMS) {
     stems[id] = {
       id,
       position: [0, 1.2, -0.45],
@@ -73,6 +80,7 @@ export function createMixState(): MixState {
     spherePosition: [0, 1.2, -0.45],
     stems,
     loopSectionId: null,
+    hasRecording: false,
   };
 }
 
@@ -85,6 +93,7 @@ export function snapshotMix(state: MixState): MixState {
 export function isStemAudible(state: MixState, id: StemId): boolean {
   const stem = state.stems[id];
   if (stem.muted) return false;
-  const anySolo = STEM_IDS.some((s) => state.stems[s].soloed);
+  if (id === 'you' && !state.hasRecording) return false;
+  const anySolo = ALL_STEMS.some((s) => state.stems[s]?.soloed);
   return anySolo ? stem.soloed : true;
 }

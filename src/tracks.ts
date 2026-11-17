@@ -4,7 +4,7 @@
  * that fails to load) is synthesized in the browser so the app always plays.
  */
 
-import { STEM_IDS, type StemId } from './mix-state.js';
+import { STEM_IDS, type TrackStemId as StemId } from './mix-state.js';
 import { synthesizePlaceholderStem } from './placeholder-stems.js';
 
 export interface TrackSection {

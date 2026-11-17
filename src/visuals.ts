@@ -18,7 +18,7 @@ import {
   SphereGeometry,
   SRGBColorSpace,
 } from '@iwsdk/core';
-import type { StemId } from './mix-state.js';
+import { STEM_IDS, type StemId } from './mix-state.js';
 import { ORB_RADIUS, SPHERE_RADIUS } from './layout.js';
 
 export const STEM_COLORS: Record<StemId, string> = {
@@ -26,6 +26,7 @@ export const STEM_COLORS: Record<StemId, string> = {
   drums: '#ffb020',
   bass: '#3d7bff',
   other: '#2fd27a',
+  you: '#a59fb8',
 };
 
 export const STEM_LABELS: Record<StemId, string> = {
@@ -33,6 +34,7 @@ export const STEM_LABELS: Record<StemId, string> = {
   drums: 'DRUMS',
   bass: 'BASS',
   other: 'OTHER',
+  you: 'YOU',
 };
 
 function labelTexture(text: string, width = 512, height = 128, bg?: string): CanvasTexture {
@@ -145,7 +147,7 @@ export function makeSongSphere(): GlowParts & { satellites: Mesh[] } {
 
   // Four small stem-colored lights swirl inside: a hint of what is in there.
   const satellites: Mesh[] = [];
-  for (const stem of Object.keys(STEM_COLORS) as StemId[]) {
+  for (const stem of STEM_IDS) {
     const m = new Mesh(
       new SphereGeometry(SPHERE_RADIUS * 0.22, 16, 12),
       new MeshBasicMaterial({ color: STEM_COLORS[stem] }),
