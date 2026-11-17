@@ -65,6 +65,7 @@ import {
   STEM_LABELS,
   type TextPlane,
 } from './visuals.js';
+import { ORB_WAVE_RISE, type OrbWave, WaveformViews } from './waveform.js';
 
 /** Hands must spread this much farther apart than where the grab began. */
 const SPLIT_PULL_METERS = 0.25;
@@ -112,6 +113,8 @@ interface Label {
 interface OrbRecord {
   orb: Entity;
   tab: Button;
+  wave: OrbWave;
+  waveEntity: Entity;
 }
 
 export class UnmixSystem extends createSystem({
@@ -155,6 +158,10 @@ export class UnmixSystem extends createSystem({
   private note!: Label;
   private pitchCaption!: Label;
   private orbRecords = new Map<StemId, OrbRecord>();
+  private waves!: WaveformViews;
+  /** Reused every frame for the waveform update (no per-frame allocation). */
+  private orbWaveList: [StemId, OrbWave][] = [];
+  private playheadOf = (id: StemId): number => this.engine.getPlayhead(id);
 
   // Scratch objects, allocated once.
   private v1 = new Vector3();
@@ -180,6 +187,8 @@ export class UnmixSystem extends createSystem({
 
     this.createSphere();
     this.createButtons();
+    this.waves = new WaveformViews();
+    this.world.createTransformEntity(this.waves.strip);
     this.installAudioUnlock();
     void this.loadShelf();
 
@@ -378,6 +387,7 @@ export class UnmixSystem extends createSystem({
       this.engine.stop();
       this.engine.setTrack(track);
       this.track = track;
+      this.waves.setTrack(track);
 
       // Fresh mix for the new track, keeping the layout anchor.
       const fresh = createMixState();
@@ -445,8 +455,12 @@ export class UnmixSystem extends createSystem({
         color: STEM_COLORS[stem],
       });
       this.setShown(tab, true);
-      this.orbRecords.set(stem, { orb, tab });
+      const wave = this.waves.makeOrbWave(stem);
+      wave.root.position.copy(this.v1);
+      const waveEntity = this.world.createTransformEntity(wave.root);
+      this.orbRecords.set(stem, { orb, tab, wave, waveEntity });
     }
+    this.orbWaveList = [...this.orbRecords].map(([id, r]) => [id, r.wave]);
 
     this.state.phase = 'split';
     this.engine.burst();
@@ -478,11 +492,13 @@ export class UnmixSystem extends createSystem({
   }
 
   private removeOrbs(): void {
-    for (const { orb, tab } of this.orbRecords.values()) {
+    for (const { orb, tab, waveEntity } of this.orbRecords.values()) {
       orb.dispose();
       tab.entity.dispose();
+      waveEntity.dispose();
     }
     this.orbRecords.clear();
+    this.orbWaveList = [];
     this.mergeTimer = 0;
   }
 
@@ -628,6 +644,7 @@ export class UnmixSystem extends createSystem({
       JSON.stringify({ ...this.state, selected: this.selected, pending: this.pending?.suggestion.label ?? null, saved: this.savedMix !== null }),
     );
     const phase = this.state.phase;
+    this.waves.strip.visible = phase !== 'idle';
     const merging = this.mergeTimer > 0;
     const split = phase === 'split' && !merging;
 
@@ -695,6 +712,8 @@ export class UnmixSystem extends createSystem({
       b.place(b.parts.root.position);
       this.faceHead(b.parts.root);
     }
+    this.layout.stripPosition(this.waves.strip.position);
+    this.faceHead(this.waves.strip);
     for (const label of [this.note, this.pitchCaption]) {
       const root = label.entity.object3D!;
       label.place(root.position);
@@ -729,6 +748,7 @@ export class UnmixSystem extends createSystem({
 
     if (this.state.phase === 'split') this.updateOrbs(delta);
     else this.updateSphere(time);
+    if (this.state.phase !== 'idle') this.waves.update(this.state, this.playheadOf, this.orbWaveList);
     this.updateButtons(delta);
   }
 
@@ -825,6 +845,10 @@ export class UnmixSystem extends createSystem({
         const tabRoot = record.tab.parts.root;
         tabRoot.position.set(this.v1.x, this.v1.y - TAB_DROP, this.v1.z);
         this.faceHead(tabRoot);
+        const waveRoot = record.wave.root;
+        waveRoot.position.set(this.v1.x, this.v1.y + ORB_WAVE_RISE, this.v1.z);
+        waveRoot.visible = !merging;
+        this.faceHead(waveRoot);
       }
 
       const near =

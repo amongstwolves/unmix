@@ -32,6 +32,10 @@ interface StemChain {
   panner: PannerNode;
   levelData: Float32Array<ArrayBuffer>;
   level: number;
+  /** Playhead bookkeeping: position (s) at markTime, moving at rate. */
+  rate: number;
+  posAtMark: number;
+  markTime: number;
 }
 
 export class AudioEngine {
@@ -40,6 +44,7 @@ export class AudioEngine {
   private readonly chains: Record<StemId, StemChain>;
   private track: LoadedTrack | null = null;
   private playing = false;
+  private loop: { start: number; end: number } | null = null;
 
   constructor() {
     this.ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -98,6 +103,9 @@ export class AudioEngine {
       panner,
       levelData: new Float32Array(analyser.fftSize),
       level: 0,
+      rate: 1,
+      posAtMark: 0,
+      markTime: 0,
     };
   }
 
@@ -136,12 +144,18 @@ export class AudioEngine {
       source.connect(chain.filter);
       source.start(startAt);
       chain.source = source;
+      chain.rate = 1;
+      chain.posAtMark = 0;
+      chain.markTime = startAt;
     }
+    this.loop = null;
     this.playing = true;
   }
 
   /** Loop only part of the track (seconds), or the whole track with null. */
   setLoop(section: { start: number; end: number } | null): void {
+    this.markAll();
+    this.loop = section && section.end > section.start ? { ...section } : null;
     for (const id of STEM_IDS) {
       const source = this.chains[id].source;
       if (!source?.buffer) continue;
@@ -181,6 +195,11 @@ export class AudioEngine {
       chain.echoSend.gain.setTargetAtTime(stem.echo, now, SMOOTHING);
       if (chain.source) {
         const rate = 2 ** (Math.round(stem.pitch) / 12);
+        if (rate !== chain.rate) {
+          chain.posAtMark = this.positionOf(chain);
+          chain.markTime = now;
+          chain.rate = rate;
+        }
         chain.source.playbackRate.setTargetAtTime(rate, now, SMOOTHING);
       }
     }
@@ -218,6 +237,35 @@ export class AudioEngine {
       l.setPosition(px, py, pz);
       l.setOrientation(fx, fy, fz, ux, uy, uz);
     }
+  }
+
+  private markAll(): void {
+    const now = this.ctx.currentTime;
+    for (const id of STEM_IDS) {
+      const chain = this.chains[id];
+      chain.posAtMark = this.positionOf(chain);
+      chain.markTime = now;
+    }
+  }
+
+  private positionOf(chain: StemChain): number {
+    const buffer = chain.source?.buffer;
+    if (!this.playing || !buffer) return 0;
+    const elapsed = Math.max(0, this.ctx.currentTime - chain.markTime);
+    let pos = chain.posAtMark + elapsed * chain.rate;
+    const start = this.loop ? this.loop.start : 0;
+    const end = this.loop ? Math.min(this.loop.end, buffer.duration) : buffer.duration;
+    if (pos >= end && end > start) pos = start + ((pos - start) % (end - start));
+    return pos;
+  }
+
+  /** Where a stem is in the track, in seconds (follows pitch and loops). */
+  getPlayhead(id: StemId): number {
+    return this.positionOf(this.chains[id]);
+  }
+
+  get duration(): number {
+    return this.track?.buffers.vocals.duration ?? 0;
   }
 
   /** Smoothed 0..1 loudness of a stem, for making the orbs pulse. */

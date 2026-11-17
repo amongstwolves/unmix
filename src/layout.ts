@@ -82,9 +82,14 @@ export class Layout {
     return this.around(Math.atan2(offset, distance), Math.hypot(offset, distance), 0.02, out);
   }
 
+  /** Full-track waveform strip: farther away, just above the chips. */
+  stripPosition(out: Vector3): Vector3 {
+    return this.around(0, 1.0, -0.27, out);
+  }
+
   /** The producer's one-line "why", just over the chips. */
   notePosition(out: Vector3): Vector3 {
-    return this.around(0, 0.44, -0.065, out);
+    return this.around(0, 0.44, -0.045, out);
   }
 
   slotPosition(slot: number, out: Vector3): Vector3 {
