@@ -16,8 +16,6 @@ import {
   MeshStandardMaterial,
   PlaneGeometry,
   SphereGeometry,
-  Sprite,
-  SpriteMaterial,
   SRGBColorSpace,
 } from '@iwsdk/core';
 import type { StemId } from './mix-state.js';
@@ -99,14 +97,7 @@ export function makeOrb(stem: StemId): GlowParts {
   glow.raycast = () => {}; // visual only
   root.add(glow);
 
-  const label = new Sprite(
-    new SpriteMaterial({ map: labelTexture(STEM_LABELS[stem]), depthWrite: false }),
-  );
-  label.scale.set(0.1, 0.025, 1);
-  label.position.set(0, ORB_RADIUS + 0.03, 0);
-  label.raycast = () => {};
-  root.add(label);
-
+  // The stem name lives on the orb's tab (a poke button), not on the orb.
   return { root, core, glow, baseColor: color };
 }
 
@@ -165,34 +156,106 @@ export interface ButtonParts {
   body: Mesh<BoxGeometry, MeshStandardMaterial>;
   face: Mesh<PlaneGeometry, MeshBasicMaterial>;
   setLabel: (text: string) => void;
+  /** Lit-up look for toggles that are on (mute, solo, echo). */
+  setActive: (active: boolean) => void;
+  setColor: (color: string) => void;
+  active: boolean;
 }
 
-/** A 12 x 8 cm poke button with a text label. */
-export function makeButton(text: string, color = '#7c5cff'): ButtonParts {
+export interface ButtonOptions {
+  width?: number;
+  height?: number;
+  color?: string;
+}
+
+/** A poke button with a text label. Default 12 x 8 cm. */
+export function makeButton(text: string, options: ButtonOptions = {}): ButtonParts {
+  const width = options.width ?? 0.12;
+  const height = options.height ?? 0.08;
+  const baseColor = new Color(options.color ?? '#7c5cff');
   const root = new Group();
   root.name = 'button';
   const body = new Mesh(
-    new BoxGeometry(0.12, 0.08, 0.025),
+    new BoxGeometry(width, height, 0.02),
     new MeshStandardMaterial({
-      color,
-      emissive: new Color(color),
+      color: baseColor.clone(),
+      emissive: baseColor.clone(),
       emissiveIntensity: 0.25,
       roughness: 0.5,
     }),
   );
   root.add(body);
+  const aspect = width / height;
+  const texHeight = 128;
+  const texWidth = Math.round(Math.min(1024, texHeight * aspect * 2.2));
   const face = new Mesh(
-    new PlaneGeometry(0.11, 0.0275),
-    new MeshBasicMaterial({ map: labelTexture(text), transparent: true, depthWrite: false }),
+    new PlaneGeometry(width * 0.94, (width * 0.94 * texHeight) / texWidth),
+    new MeshBasicMaterial({
+      map: labelTexture(text, texWidth, texHeight),
+      transparent: true,
+      depthWrite: false,
+    }),
   );
-  face.position.z = 0.0131;
+  face.position.z = 0.0105;
   face.raycast = () => {};
   root.add(face);
 
-  const setLabel = (next: string): void => {
-    face.material.map?.dispose();
-    face.material.map = labelTexture(next);
-    face.material.needsUpdate = true;
+  let currentText = text;
+  const parts: ButtonParts = {
+    root,
+    body,
+    face,
+    active: false,
+    setLabel: (next: string) => {
+      if (next === currentText) return;
+      currentText = next;
+      face.material.map?.dispose();
+      face.material.map = labelTexture(next, texWidth, texHeight);
+      face.material.needsUpdate = true;
+    },
+    setActive: (active: boolean) => {
+      parts.active = active;
+      body.material.color.copy(baseColor);
+      if (active) body.material.color.lerp(WHITE, 0.45);
+    },
+    setColor: (color: string) => {
+      baseColor.set(color);
+      body.material.emissive.copy(baseColor);
+      parts.setActive(parts.active);
+    },
   };
-  return { root, body, face, setLabel };
+  return parts;
+}
+
+const WHITE = new Color('#ffffff');
+
+export interface TextPlane {
+  mesh: Mesh<PlaneGeometry, MeshBasicMaterial>;
+  setText: (text: string) => void;
+}
+
+/** A flat, non-interactive line of text. */
+export function makeTextPlane(text: string, width: number, height: number): TextPlane {
+  const texHeight = 96;
+  const texWidth = Math.round(Math.min(2048, (texHeight * width) / height));
+  const mesh = new Mesh(
+    new PlaneGeometry(width, height),
+    new MeshBasicMaterial({
+      map: labelTexture(text, texWidth, texHeight),
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  mesh.raycast = () => {};
+  let current = text;
+  return {
+    mesh,
+    setText: (next: string) => {
+      if (next === current) return;
+      current = next;
+      mesh.material.map?.dispose();
+      mesh.material.map = labelTexture(next, texWidth, texHeight);
+      mesh.material.needsUpdate = true;
+    },
+  };
 }

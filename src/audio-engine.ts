@@ -140,6 +140,21 @@ export class AudioEngine {
     this.playing = true;
   }
 
+  /** Loop only part of the track (seconds), or the whole track with null. */
+  setLoop(section: { start: number; end: number } | null): void {
+    for (const id of STEM_IDS) {
+      const source = this.chains[id].source;
+      if (!source?.buffer) continue;
+      if (section && section.end > section.start) {
+        source.loopStart = Math.max(0, section.start);
+        source.loopEnd = Math.min(source.buffer.duration, section.end);
+      } else {
+        source.loopStart = 0;
+        source.loopEnd = 0; // 0 = whole buffer
+      }
+    }
+  }
+
   stop(): void {
     for (const id of STEM_IDS) {
       const chain = this.chains[id];

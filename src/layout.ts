@@ -15,7 +15,7 @@ const ARC_RADIUS = 0.5;
 /** Arc spans this many degrees either side of straight ahead. */
 const ARC_HALF_ANGLE_DEG = 70;
 /** Slots sit this far below eye height (chest to eye range). */
-const ARC_DROP = 0.15;
+const ARC_DROP = 0.12;
 
 const SPHERE_DISTANCE = 0.42;
 const SPHERE_DROP = 0.2;
@@ -58,6 +58,33 @@ export class Layout {
     const offset = (index - (count - 1) / 2) * spacing;
     const angle = Math.atan2(offset, 0.36);
     return this.around(angle, Math.hypot(offset, 0.36), SPHERE_DROP + 0.17, out);
+  }
+
+  /** Mixing panel: 4 columns x 2 rows of 10 x 8 cm buttons, close and low. */
+  panelPosition(col: number, row: number, out: Vector3): Vector3 {
+    const offset = (col - 1.5) * 0.16; // 6 cm gaps
+    const distance = 0.3 + row * 0.03;
+    const angle = Math.atan2(offset, distance);
+    return this.around(angle, Math.hypot(offset, distance), 0.26 + row * 0.14, out);
+  }
+
+  /** Caption between the two panel rows, centered over columns a..b. */
+  panelCaptionPosition(colA: number, colB: number, out: Vector3): Vector3 {
+    const offset = ((colA + colB) / 2 - 1.5) * 0.16;
+    const distance = 0.315;
+    return this.around(Math.atan2(offset, distance), Math.hypot(offset, distance), 0.33, out);
+  }
+
+  /** Producer chips: a row of 3 at eye height, in front of the orbs. */
+  chipPosition(index: number, out: Vector3): Vector3 {
+    const offset = (index - 1) * 0.25; // 19 cm chips, 6 cm gaps
+    const distance = 0.42;
+    return this.around(Math.atan2(offset, distance), Math.hypot(offset, distance), 0.02, out);
+  }
+
+  /** The producer's one-line "why", just over the chips. */
+  notePosition(out: Vector3): Vector3 {
+    return this.around(0, 0.44, -0.065, out);
   }
 
   slotPosition(slot: number, out: Vector3): Vector3 {

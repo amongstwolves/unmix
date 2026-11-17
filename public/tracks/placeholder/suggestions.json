@@ -1,0 +1,104 @@
+[
+  {
+    "label": "Drums wide, vocals close",
+    "why": "Spreading the drums out leaves room for the melody right in front of you.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "drums",
+        "slot": 0
+      },
+      {
+        "type": "move",
+        "stem": "vocals",
+        "slot": 3
+      },
+      {
+        "type": "move",
+        "stem": "other",
+        "slot": 7
+      }
+    ]
+  },
+  {
+    "label": "Strip it to bass and lead",
+    "why": "Taking out drums and pads shows how the bass and the melody fit together.",
+    "actions": [
+      {
+        "type": "mute",
+        "stem": "drums"
+      },
+      {
+        "type": "mute",
+        "stem": "other"
+      }
+    ]
+  },
+  {
+    "label": "Dub echo on the lead",
+    "why": "A tempo-synced echo on the lead makes the gaps between phrases sing.",
+    "actions": [
+      {
+        "type": "setEcho",
+        "stem": "vocals",
+        "value": 0.5
+      },
+      {
+        "type": "setFilter",
+        "stem": "vocals",
+        "value": 0.75
+      }
+    ]
+  },
+  {
+    "label": "Dark, distant pads",
+    "why": "Darkening the pads and pushing them aside makes the track feel bigger.",
+    "actions": [
+      {
+        "type": "setFilter",
+        "stem": "other",
+        "value": 0.25
+      },
+      {
+        "type": "move",
+        "stem": "other",
+        "slot": 7
+      },
+      {
+        "type": "setVolume",
+        "stem": "other",
+        "value": 0.7
+      }
+    ]
+  },
+  {
+    "label": "Half-time bass drop",
+    "why": "Dropping the bass to half speed gives a heavy, slowed-down groove.",
+    "actions": [
+      {
+        "type": "halfTime",
+        "stem": "bass"
+      },
+      {
+        "type": "move",
+        "stem": "bass",
+        "slot": 2
+      }
+    ]
+  },
+  {
+    "label": "Loop the first two bars",
+    "why": "Repeating the opening phrase turns it into a hypnotic hook.",
+    "actions": [
+      {
+        "type": "loopSection",
+        "sectionId": "a"
+      },
+      {
+        "type": "setEcho",
+        "stem": "drums",
+        "value": 0.25
+      }
+    ]
+  }
+]

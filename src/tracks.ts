@@ -102,3 +102,42 @@ export async function loadTrack(
   const buffers = Object.fromEntries(entries) as Record<StemId, AudioBuffer>;
   return { info, buffers: equalizeLengths(ctx, buffers) };
 }
+
+/** Track ids listed in public/tracks/index.json, in shelf order. */
+export async function loadTrackList(): Promise<string[]> {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}tracks/index.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = (await response.json()) as { tracks?: unknown };
+    const ids = Array.isArray(data.tracks)
+      ? data.tracks.filter((t): t is string => typeof t === 'string')
+      : [];
+    if (ids.length > 0) return ids;
+  } catch (error) {
+    console.warn('[unmix] tracks/index.json missing or invalid; using the placeholder', error);
+  }
+  return ['placeholder'];
+}
+
+export async function loadTrackInfo(trackId: string): Promise<TrackInfo> {
+  const response = await fetch(trackUrl(trackId, 'track.json'));
+  if (!response.ok) throw new Error(`Could not load track.json for "${trackId}"`);
+  return (await response.json()) as TrackInfo;
+}
+
+/**
+ * The track's precomputed producer suggestions (raw; validate before use).
+ * A missing file just means no chips for that track.
+ */
+export async function loadSuggestionsFile(trackId: string): Promise<unknown[]> {
+  try {
+    const response = await fetch(trackUrl(trackId, 'suggestions.json'));
+    if (!response.ok) return [];
+    const data = (await response.json()) as unknown;
+    if (Array.isArray(data)) return data;
+    const inner = (data as { suggestions?: unknown }).suggestions;
+    return Array.isArray(inner) ? inner : [];
+  } catch {
+    return [];
+  }
+}

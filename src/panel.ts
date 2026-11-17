@@ -32,6 +32,9 @@ export class PanelSystem extends createSystem({}) {
         const is2D = visibilityState === VisibilityState.NonImmersive;
         xrButton.setProperties({ display: is2D ? 'flex' : 'none' });
         exitButton.setProperties({ display: is2D ? 'none' : 'flex' });
+        // In XR the panel only gets in the way of the mixing space (the
+        // headset's own menu exits), so hide it there.
+        panel!.visible = is2D;
       }),
     );
   }

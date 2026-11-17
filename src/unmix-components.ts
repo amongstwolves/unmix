@@ -17,3 +17,8 @@ export const SongSphere = createComponent('SongSphere', {});
 export const PokeButton = createComponent('PokeButton', {
   action: { type: Types.String, default: '' },
 });
+
+/** Read-only copy of the mix state as JSON, so dev tools can inspect it. */
+export const MixStateMirror = createComponent('MixStateMirror', {
+  json: { type: Types.String, default: '{}' },
+});

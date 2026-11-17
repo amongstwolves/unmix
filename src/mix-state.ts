@@ -39,6 +39,8 @@ export interface MixState {
   /** Where the song sphere sits (world space). */
   spherePosition: Vec3Tuple;
   stems: Record<StemId, StemState>;
+  /** Section being looped (from track.json), or null for the whole track. */
+  loopSectionId: string | null;
 }
 
 /** Default arc slot per stem, left to right as the user sees them. */
@@ -70,6 +72,7 @@ export function createMixState(): MixState {
     phase: 'idle',
     spherePosition: [0, 1.2, -0.45],
     stems,
+    loopSectionId: null,
   };
 }
 
