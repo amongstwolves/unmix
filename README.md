@@ -8,7 +8,9 @@ Meta VR Start Developer Competition 2026.
 
 ## Try it on a Meta Quest
 
-Live at **https://amongstwolves.github.io/unmix/** · Demo video: https://youtu.be/Eh4X2sVBGE0 It's a WebXR website, so
+Live at **https://amongstwolves.github.io/unmix/** · Demo video: https://youtu.be/Eh4X2sVBGE0
+
+It's a WebXR website, so
 nothing to install.
 
 1. Turn on hand tracking: Settings → Movement Tracking → Hand Tracking.
