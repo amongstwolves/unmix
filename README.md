@@ -20,7 +20,7 @@ for a Quest 3 (headset, controllers and hands), so no headset is needed.
 
 ## Using it
 
-1. Poke a record tile to load a song into the sphere.
+1. Under "Choose a song", poke a record tile. The song sphere appears and plays.
 2. Grab the sphere with both hands and pull them apart (or poke **Split**).
 3. Grab an orb to move a stem around you. Where it is, is where you hear it.
 4. Grab an orb, or poke the name tab under it, to open that stem's panel:
@@ -35,6 +35,10 @@ for a Quest 3 (headset, controllers and hands), so no headset is needed.
 7. Hold one orb pushed into another for a moment (or poke **Mix down**) to fuse
    them back into one song. The mix is saved ("Mix saved"); **Saved mix**
    brings it back.
+
+**Menu** (lower left, once a song is loaded) has **Songs** (back to the
+shelf), **Start over** (reset this song's mix) and **How to play** (show the
+hints again). A track can set its record color with `"color"` in `track.json`.
 
 The strip above the orbs shows the whole track, one lane per stem, with a
 playhead per lane. Each orb carries its own small waveform.

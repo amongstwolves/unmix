@@ -80,6 +80,23 @@ export class Layout {
     return this.around(0, 1.0, -0.27, out);
   }
 
+  /** Song shelf: a row of 18 cm tiles where the sphere will appear, 6 cm apart. */
+  shelfPosition(index: number, count: number, out: Vector3): Vector3 {
+    const offset = (index - (count - 1) / 2) * 0.24;
+    const distance = 0.42;
+    return this.around(Math.atan2(offset, distance), Math.hypot(offset, distance), SPHERE_DROP, out);
+  }
+
+  /** "Choose a song", over the shelf. */
+  shelfHeadingPosition(out: Vector3): Vector3 {
+    return this.around(0, 0.44, SPHERE_DROP - 0.1, out);
+  }
+
+  /** The Menu key: lower left of the controls (the panel's bottom-left spot). */
+  menuPosition(out: Vector3): Vector3 {
+    return this.panelPosition(0, 1, out);
+  }
+
   /** "Mix saved" note, just above the song sphere. */
   toastPosition(out: Vector3): Vector3 {
     return this.around(0, SPHERE_DISTANCE, SPHERE_DROP - SPHERE_RADIUS - 0.06, out);

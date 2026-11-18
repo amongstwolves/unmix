@@ -91,6 +91,8 @@ const SAVED_KEY = (trackId: string) => `unmix.savedMix.${trackId}`;
 /** Arc slots the Record button (and then the YOU orb) prefers, in order. */
 const RECORD_SLOT_ORDER = [5, 2, 7, 0, 6, 1, 3, 4];
 const MUTED_GRAY = new Color('#7a7a80');
+/** Record label colors for song tiles (a track.json "color" overrides). */
+const DISC_COLORS = ['#c9b6ff', '#ff5c8a', '#3d7bff', '#2fd27a', '#ffb020'];
 /** Dark, soft backing for hints and notes over a bright passthrough room. */
 const HINT_PILL = 'rgba(14, 13, 18, 0.62)';
 /** The song sphere's violet, also used for whole-song actions. */
@@ -166,7 +168,14 @@ export class UnmixSystem extends createSystem({
   private grabStart: { stem: StemId; position: [number, number, number]; slot: number | null } | null = null;
 
   private trackTiles: Button[] = [];
-  private wholeRow!: { split: Button; restore: Button; tracks: Button };
+  private trackTitles = new Map<string, string>();
+  private shelfHeading!: Label;
+  private menuOpen = false;
+  private menuButton!: Button;
+  private menuItems!: { songs: Button; restart: Button; howto: Button };
+  /** 0..1 grow-in when the song sphere appears. */
+  private sphereAppear = 1;
+  private wholeRow!: { split: Button; restore: Button };
   private panel!: Record<
     'mute' | 'solo' | 'echo' | 'done' | 'darker' | 'brighter' | 'pitchDown' | 'pitchUp',
     Button
@@ -253,6 +262,9 @@ export class UnmixSystem extends createSystem({
       scaleMax: [1.8, 1.8, 1.8],
     });
     parts.root.userData.visual = { parts } satisfies SphereVisual;
+    // No song yet: the shelf comes first and the sphere appears with the song.
+    parts.root.visible = false;
+    parts.root.position.set(0, -50, 0);
     this.sphereEntity = entity;
   }
 
@@ -289,9 +301,8 @@ export class UnmixSystem extends createSystem({
   private createButtons(): void {
     const L = this.layout;
     this.wholeRow = {
-      split: this.makeBtn('split-button', 'Split', 'split', (o) => L.buttonPosition(0, 3, o), { style: 'accent', color: SPHERE_COLOR }),
-      restore: this.makeBtn('saved-mix-button', 'Saved mix', 'restore', (o) => L.buttonPosition(1, 3, o)),
-      tracks: this.makeBtn('tracks-button', 'Tracks', 'tracks', (o) => L.buttonPosition(2, 3, o)),
+      split: this.makeBtn('split-button', 'Split', 'split', (o) => L.buttonPosition(1, 3, o), { style: 'accent', color: SPHERE_COLOR }),
+      restore: this.makeBtn('saved-mix-button', 'Saved mix', 'restore', (o) => L.buttonPosition(2, 3, o)),
     };
     const small = { width: 0.1, height: 0.08 };
     const at = (col: number, row: number) => (o: Vector3) => L.panelPosition(col, row, o);
@@ -332,6 +343,15 @@ export class UnmixSystem extends createSystem({
       );
     }
     this.toast = this.makeLabel('Mix saved', 0.2, 0.035, (o) => L.toastPosition(o), HINT_PILL);
+    this.shelfHeading = this.makeLabel('Choose a song', 0.3, 0.045, (o) => L.shelfHeadingPosition(o), HINT_PILL);
+
+    // Menu: one key, same place every time; its items take the panel's spot.
+    this.menuButton = this.makeBtn('menu-button', 'Menu', 'menu', (o) => L.menuPosition(o), small);
+    this.menuItems = {
+      songs: this.makeBtn('menu-songs', 'Songs', 'songs', at(0, 0), small),
+      restart: this.makeBtn('menu-restart', 'Start over', 'restart', at(1, 0), small),
+      howto: this.makeBtn('menu-howto', 'How to play', 'howto', at(2, 0), small),
+    };
     // One short, verb-first hint at a time; it moves on once you've done it.
     this.hint = this.makeLabel('', 0.5, 0.036, (o) => L.toastPosition(o), HINT_PILL);
     this.note = this.makeLabel('', 0.62, 0.035, (o) => L.notePosition(o));
@@ -350,15 +370,20 @@ export class UnmixSystem extends createSystem({
     );
     const count = this.trackIds.length;
     this.trackIds.forEach((id, i) => {
-      const info = infos[i] as TrackInfo | null;
+      const info = infos[i] as (TrackInfo & { color?: string }) | null;
       const title = info?.title ?? id;
       const tile = this.makeBtn(
         `track-tile-${id}`,
-        title.length > 24 ? `${title.slice(0, 23)}…` : title,
+        title,
         `track:${id}`,
-        (o) => this.layout.buttonPosition(i, count, o),
-        { style: 'accent', color: SPHERE_COLOR },
+        (o) => this.layout.shelfPosition(i, count, o),
+        {
+          width: 0.18,
+          height: 0.09,
+          track: { artist: info?.artist ?? '', disc: info?.color ?? DISC_COLORS[i % DISC_COLORS.length] },
+        },
       );
+      this.trackTitles.set(id, title);
       this.trackTiles.push(tile);
     });
     this.placeAll();
@@ -403,6 +428,10 @@ export class UnmixSystem extends createSystem({
       case 'select': this.selected = this.selected === arg ? null : (arg as StemId); break;
       case 'done': this.selected = null; break;
       case 'ask': this.producerOpen = !this.producerOpen; break;
+      case 'menu': this.menuOpen = !this.menuOpen; break;
+      case 'songs': this.menuOpen = false; this.goIdle(); break;
+      case 'restart': this.menuOpen = false; this.startOver(); break;
+      case 'howto': this.menuOpen = false; this.showHowTo(); break;
       case 'mixdown': this.mixDown(); break;
       case 'chip': this.onChip(Number(arg)); break;
       case 'record': void this.startRecording(); break;
@@ -475,14 +504,31 @@ export class UnmixSystem extends createSystem({
     } catch (error) {
       console.error('[unmix] track failed to load', error);
     } finally {
-      const title = this.track?.info.id === trackId ? this.track.info.title : trackId;
-      tile?.parts.setLabel(title.length > 24 ? `${title.slice(0, 23)}…` : title);
+      tile?.parts.setLabel(this.trackTitles.get(trackId) ?? trackId);
       this.loadingTrack = false;
       this.refreshUi();
     }
   }
 
-  /** Back to the track shelf. Stops the music. */
+  /** Reset this song's mix (keeps the song playing and any recording). */
+  private startOver(): void {
+    const fresh = createMixState();
+    for (const id of ALL_STEMS) this.state.stems[id] = fresh.stems[id];
+    this.setLoopSection(null);
+    this.pending = null;
+    this.producerOpen = false;
+    this.selected = null;
+    this.engine.applyMix(this.state);
+  }
+
+  /** Show the first-time hints again, from where the user is now. */
+  private showHowTo(): void {
+    const phase = this.state.phase;
+    this.learned = { played: phase !== 'idle', split: phase === 'split', moved: false, fused: false };
+    this.selected = null;
+  }
+
+  /** Back to the song shelf. Stops the music. */
   private goIdle(): void {
     if (this.state.phase === 'split') this.removeOrbs();
     this.recToken += 1;
@@ -490,8 +536,10 @@ export class UnmixSystem extends createSystem({
     this.grab.forceRelease(this.sphereEntity);
     this.engine.stop();
     this.pending = null;
+    this.producerOpen = false;
+    this.selected = null;
     this.state.phase = 'idle';
-    this.showSphere();
+    this.hideSphere(); // the sphere appears again when a song is chosen
   }
 
   // ================================================================ split / fuse
@@ -687,7 +735,7 @@ export class UnmixSystem extends createSystem({
     const root = this.sphereEntity.object3D!;
     this.layout.spherePosition(root.position);
     this.state.spherePosition = [root.position.x, root.position.y, root.position.z];
-    root.scale.setScalar(1);
+    if (!root.visible) this.sphereAppear = 0; // grow in
     root.visible = true;
   }
 
@@ -837,16 +885,25 @@ export class UnmixSystem extends createSystem({
     const split = phase === 'split' && !merging;
 
     for (const tile of this.trackTiles) this.setShown(tile, phase === 'idle');
-    this.setShown(this.wholeRow.split, phase === 'whole');
-    this.setShown(this.wholeRow.restore, phase === 'whole' && this.savedMix !== null);
-    this.setShown(this.wholeRow.tracks, phase === 'whole' && this.trackIds.length > 1);
+    const menu = this.menuOpen && phase !== 'idle';
+    this.setShown(this.wholeRow.split, phase === 'whole' && !menu);
+    this.setShown(this.wholeRow.restore, phase === 'whole' && this.savedMix !== null && !menu);
+    // The shelf is the first screen: heading over record tiles, no sphere yet.
+    const xr = this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+    this.shelfHeading.entity.object3D!.visible = phase === 'idle' && xr;
+    // Menu key: always in the same spot once a song is loaded.
+    const panelOpen = split && !this.menuOpen && this.selected !== null && this.orbRecords.has(this.selected);
+    this.setShown(this.menuButton, phase !== 'idle' && !merging && !panelOpen);
+    this.menuButton.parts.setLabel(menu ? 'Close' : 'Menu');
+    this.menuButton.parts.setActive(menu);
+    for (const item of Object.values(this.menuItems)) this.setShown(item, menu && !merging);
 
     // Panel only for a selected stem; otherwise the calm browse row.
     if (this.selected && !this.orbRecords.has(this.selected)) this.selected = null;
-    const sel = split ? this.selected : null;
+    const sel = split && !menu ? this.selected : null;
     for (const button of Object.values(this.panel)) this.setShown(button, sel !== null);
-    this.setShown(this.browse.ask, split && sel === null && this.suggestions.length > 0);
-    this.setShown(this.browse.mixdown, split && sel === null);
+    this.setShown(this.browse.ask, split && !menu && sel === null && this.suggestions.length > 0);
+    this.setShown(this.browse.mixdown, split && !menu && sel === null);
     this.browse.ask.parts.setLabel(this.producerOpen || this.pending ? 'Hide ideas' : 'Ask producer');
     this.browse.ask.parts.setActive(this.producerOpen || this.pending !== null);
     if (sel) {
@@ -869,7 +926,7 @@ export class UnmixSystem extends createSystem({
     // Record button: at a free arc slot, while the orbs are out.
     const recSlot = split ? this.freeSlot() : null;
     const recBusy = this.recState !== 'none';
-    this.setShown(this.recordButton, split && (recSlot !== null || recBusy));
+    this.setShown(this.recordButton, split && !menu && (recSlot !== null || recBusy));
     if (recSlot !== null && !recBusy) {
       const root = this.recordButton.parts.root;
       this.layout.slotPosition(recSlot, root.position);
@@ -881,7 +938,7 @@ export class UnmixSystem extends createSystem({
     this.updateHint(split);
 
     if (this.pending) this.producerOpen = true;
-    const hasChips = split && this.suggestions.length > 0 && this.producerOpen;
+    const hasChips = split && !menu && this.suggestions.length > 0 && this.producerOpen;
     this.chips.forEach((chip, i) => this.setShown(chip, hasChips));
     this.note.entity.object3D!.visible = hasChips;
     if (hasChips) {
@@ -911,8 +968,7 @@ export class UnmixSystem extends createSystem({
     const phase = this.state.phase;
     let text = '';
     let nearSphere = true;
-    if (phase === 'idle' && !L.played) text = 'Poke a track to play it';
-    else if (phase === 'whole' && !L.split) text = 'Grab the sphere with both hands and pull apart';
+    if (phase === 'whole' && !L.split) text = 'Grab the sphere with both hands and pull apart';
     else if (split && !L.moved) {
       text = 'Grab an orb and move it. You hear it where it is.';
       nearSphere = false;
@@ -939,6 +995,8 @@ export class UnmixSystem extends createSystem({
       ...Object.values(this.wholeRow),
       ...Object.values(this.panel),
       ...Object.values(this.browse),
+      this.menuButton,
+      ...Object.values(this.menuItems),
       ...this.chips,
     ];
     for (const b of all) {
@@ -948,7 +1006,7 @@ export class UnmixSystem extends createSystem({
     }
     this.layout.stripPosition(this.waves.strip.position);
     this.faceHead(this.waves.strip);
-    for (const label of [this.note, this.toast]) {
+    for (const label of [this.note, this.toast, this.shelfHeading]) {
       const root = label.entity.object3D!;
       label.place(root.position);
       this.faceHead(root);
@@ -996,7 +1054,7 @@ export class UnmixSystem extends createSystem({
       this.recordButton.parts.setActive(!flash);
     }
     if (this.state.phase === 'split') this.updateOrbs(delta);
-    else this.updateSphere(time);
+    else if (this.state.phase === 'whole') this.updateSphere(time, delta);
     if (this.state.phase !== 'idle') this.waves.update(this.state, this.playheadOf, this.orbWaveList);
     this.updateButtons(delta);
   }
@@ -1012,7 +1070,7 @@ export class UnmixSystem extends createSystem({
     this.headUp.set(e[4], e[5], e[6]).normalize();
   }
 
-  private updateSphere(time: number): void {
+  private updateSphere(time: number, delta: number): void {
     const root = this.sphereEntity.object3D!;
     const { parts } = root.userData.visual as SphereVisual;
     root.getWorldPosition(this.v1);
@@ -1044,7 +1102,9 @@ export class UnmixSystem extends createSystem({
     parts.glow.material.opacity = (0.12 + level * 0.3) * idleDim + (hovered ? 0.1 : 0);
 
     if (!held) {
-      root.scale.setScalar(1 + level * 0.06);
+      this.sphereAppear = Math.min(1, this.sphereAppear + delta * 2.5);
+      const grow = 1 - (1 - this.sphereAppear) ** 3; // ease out
+      root.scale.setScalar(grow * (1 + level * 0.06));
       return;
     }
     if (!playing) return;

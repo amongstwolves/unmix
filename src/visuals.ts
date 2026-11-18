@@ -217,6 +217,68 @@ export interface ButtonOptions {
   height?: number;
   color?: string;
   style?: ButtonStyle;
+  /** Record-style song tile: a colored disc, the title, and the artist under it. */
+  track?: { artist: string; disc: string };
+}
+
+/** Face for a song tile: disc on the left, title over artist on the right. */
+function trackTexture(
+  title: string,
+  artist: string,
+  disc: string,
+  width: number,
+  height: number,
+  ink: Ink,
+): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const g = canvas.getContext('2d')!;
+  const r = height * 0.36;
+  const cx = height * 0.5;
+  const cy = height / 2;
+  // A little record: colored label, darker grooves, spindle hole.
+  g.fillStyle = '#1d1c22';
+  g.beginPath();
+  g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.12)';
+  g.lineWidth = Math.max(1, height * 0.012);
+  for (const k of [0.82, 0.68]) {
+    g.beginPath();
+    g.arc(cx, cy, r * k, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.fillStyle = disc;
+  g.beginPath();
+  g.arc(cx, cy, r * 0.46, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#1d1c22';
+  g.beginPath();
+  g.arc(cx, cy, r * 0.08, 0, Math.PI * 2);
+  g.fill();
+
+  const x = height * 1.0;
+  const maxW = width - x - height * 0.12;
+  const fit = (text: string, px: number, weight: number) => {
+    let size = px;
+    g.font = `${weight} ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    while (size > 12 && g.measureText(text).width > maxW) {
+      size -= 2;
+      g.font = `${weight} ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    }
+  };
+  g.textAlign = 'left';
+  g.textBaseline = 'alphabetic';
+  g.fillStyle = ink === 'dark' ? '#25252a' : '#ffffff';
+  fit(title, Math.round(height * 0.27), 650);
+  g.fillText(title, x, height * 0.5);
+  g.fillStyle = ink === 'dark' ? '#5f5b68' : 'rgba(255,255,255,0.75)';
+  fit(artist, Math.round(height * 0.19), 500);
+  g.fillText(artist, x, height * 0.76);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
 }
 
 const NEUTRAL = new Color('#ebe7df');
@@ -280,14 +342,19 @@ export function makeButton(text: string, options: ButtonOptions = {}): ButtonPar
   );
   root.add(body);
 
-  const texHeight = 128;
-  const texWidth = Math.round(Math.min(1024, texHeight * (width / height) * 2.2));
+  const track = options.track;
+  const texHeight = track ? 256 : 128;
+  const texWidth = Math.round(Math.min(1024, texHeight * (width / height) * (track ? 1.6 : 2.2)));
+  const paint = (t: string, k: Ink) =>
+    track
+      ? trackTexture(t, track.artist, track.disc, texWidth, texHeight, k)
+      : labelTexture(t, texWidth, texHeight, k);
   let ink: Ink = inkFor(body.material.color);
   let currentText = text;
   const face = new Mesh(
     new PlaneGeometry(width * 0.92, (width * 0.92 * texHeight) / texWidth),
     new MeshBasicMaterial({
-      map: labelTexture(text, texWidth, texHeight, ink),
+      map: paint(text, ink),
       transparent: true,
       depthWrite: false,
     }),
@@ -299,7 +366,7 @@ export function makeButton(text: string, options: ButtonOptions = {}): ButtonPar
 
   const redraw = () => {
     face.material.map?.dispose();
-    face.material.map = labelTexture(currentText, texWidth, texHeight, ink);
+    face.material.map = paint(currentText, ink);
     face.material.needsUpdate = true;
   };
   const restyle = () => {
