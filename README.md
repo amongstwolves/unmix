@@ -4,7 +4,7 @@ Pull a song apart with your bare hands. Place each part in the room around you.
 Remix by moving sound through space.
 
 A hands-first WebXR stem player built on Meta's Immersive Web SDK (IWSDK) for the
-Meta VR Start Developer Competition 2026. Not affiliated with Teenage Engineering.
+Meta VR Start Developer Competition 2026.
 
 ## Run it
 

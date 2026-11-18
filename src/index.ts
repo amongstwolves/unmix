@@ -21,6 +21,7 @@ World.create(
     } else {
       enter.textContent = 'Open on a Meta Quest';
       notes.textContent = 'Open this page in the Meta Quest browser to start.';
+      notes.hidden = false;
     }
     world.visibilityState.subscribe((state) => {
       landing.classList.toggle('hidden', state !== VisibilityState.NonImmersive);
@@ -30,4 +31,5 @@ World.create(
     console.error('[unmix] failed to start', error);
     enter.textContent = 'Could not start';
     notes.textContent = 'Reload the page to try again.';
+    notes.hidden = false;
   });

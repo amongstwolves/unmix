@@ -57,7 +57,6 @@
       button#enter:disabled { opacity: 0.55; cursor: default; }
       button#enter:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
       .notes { margin-top: 22px; font-size: 13px; color: var(--muted); line-height: 1.6; }
-      .fine { margin-top: 18px; font-size: 11px; color: #6f6b78; }
     </style>
   </head>
   <body>
@@ -71,8 +70,7 @@
           the rest, and place each part in the room around you.
         </p>
         <button id="enter" type="button" disabled>Loading…</button>
-        <div class="notes" id="notes">Seated · hands only · headphones help</div>
-        <div class="fine">Not affiliated with Teenage Engineering.</div>
+        <div class="notes" id="notes" hidden></div>
       </div>
     </div>
     <div id="scene-container"></div>
