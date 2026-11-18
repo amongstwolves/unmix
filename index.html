@@ -10,14 +10,37 @@
     <link rel="icon" href="data:," />
     <title>Unmix</title>
     <style>
+      /* Light and dark follow the device setting. */
       :root {
-        color-scheme: dark;
+        color-scheme: light dark;
         --bg: #0e0d12;
         --ink: #f4f2ee;
         --muted: #a9a5b3;
         --key: #ebe7df;
         --key-ink: #25252a;
-        --glow: #c9b6ff;
+        --key-shadow: 0 2px 0 rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.35);
+        --eyebrow: #c9b6ff;
+        --halo: rgba(201, 182, 255, 0.28);
+        --tint-a: rgba(255, 92, 138, 0.10);
+        --tint-b: rgba(61, 123, 255, 0.10);
+        --orb-glow: rgba(201, 182, 255, 0.45);
+        --orb-glow-peak: rgba(201, 182, 255, 0.55);
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f5f3ef;
+          --ink: #1d1c22;
+          --muted: #5f5b68;
+          --key: #1d1c22;
+          --key-ink: #f5f3ef;
+          --key-shadow: 0 2px 0 rgba(0,0,0,0.18), 0 8px 20px rgba(29,28,34,0.18);
+          --eyebrow: #6a4fd6;
+          --halo: rgba(170, 145, 255, 0.30);
+          --tint-a: rgba(255, 92, 138, 0.08);
+          --tint-b: rgba(61, 123, 255, 0.08);
+          --orb-glow: rgba(150, 120, 255, 0.35);
+          --orb-glow-peak: rgba(150, 120, 255, 0.45);
+        }
       }
       html, body { margin: 0; height: 100%; background: var(--bg); }
       body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
@@ -27,42 +50,67 @@
         position: fixed; inset: 0; z-index: 10;
         display: grid; place-items: center; padding: 24px;
         background:
-          radial-gradient(circle at 50% 42%, rgba(201, 182, 255, 0.28), rgba(201, 182, 255, 0) 38%),
-          radial-gradient(circle at 38% 36%, rgba(255, 92, 138, 0.10), rgba(0,0,0,0) 30%),
-          radial-gradient(circle at 63% 48%, rgba(61, 123, 255, 0.10), rgba(0,0,0,0) 30%),
+          radial-gradient(circle at 50% 42%, var(--halo), transparent 38%),
+          radial-gradient(circle at 38% 36%, var(--tint-a), transparent 30%),
+          radial-gradient(circle at 63% 48%, var(--tint-b), transparent 30%),
           var(--bg);
         transition: opacity 300ms ease;
       }
       #landing.hidden { opacity: 0; pointer-events: none; }
       .card { max-width: 440px; text-align: center; }
+
+      /* The halo sits behind the orb in its own layer, so it never covers it. */
+      .orb-wrap { position: relative; width: 96px; height: 96px; margin: 0 auto 28px; isolation: isolate; }
       .orb {
-        width: 96px; height: 96px; margin: 0 auto 28px; border-radius: 50%;
-        background: radial-gradient(circle at 35% 30%, #fff, var(--glow) 55%, #7c5cff 100%);
-        box-shadow: 0 0 60px 10px rgba(201, 182, 255, 0.45);
+        position: relative; z-index: 1;
+        width: 96px; height: 96px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff, #c9b6ff 55%, #7c5cff 100%);
+        box-shadow: 0 0 60px 10px var(--orb-glow);
         animation: breathe 3.2s ease-in-out infinite;
       }
-      @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 80px 18px rgba(201,182,255,0.55); } }
-      @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
-      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--glow); margin: 0 0 10px; }
+      /* Rainbow halo in the stem colors, faded in while Enter XR is hovered. */
+      .halo {
+        position: absolute; inset: -22px; z-index: 0; border-radius: 50%;
+        background: conic-gradient(from 0deg, #ff5c8a, #ffb020, #2fd27a, #3d7bff, #c9b6ff, #ff5c8a);
+        filter: blur(22px);
+        opacity: 0;
+        transition: opacity 450ms ease;
+        animation: spin 6s linear infinite;
+      }
+      #landing:has(#enter:hover:not(:disabled)) .orb,
+      #landing:has(#enter:focus-visible) .orb {
+        animation-duration: 2.4s;
+      }
+      #landing:has(#enter:hover:not(:disabled)) .halo,
+      #landing:has(#enter:focus-visible) .halo {
+        opacity: 0.85;
+      }
+      @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 80px 18px var(--orb-glow-peak); } }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .orb, .halo { animation: none; }
+      }
+
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--eyebrow); margin: 0 0 10px; }
       h1 { font-size: clamp(32px, 7vw, 48px); line-height: 1.05; margin: 0 0 14px; font-weight: 700; letter-spacing: -0.01em; }
       p.lede { font-size: 17px; line-height: 1.5; color: var(--muted); margin: 0 0 28px; }
       button#enter {
         font: inherit; font-size: 17px; font-weight: 600; cursor: pointer;
         padding: 14px 34px; border: 0; border-radius: 999px;
         background: var(--key); color: var(--key-ink);
-        box-shadow: 0 2px 0 rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.35);
+        box-shadow: var(--key-shadow);
         transition: transform 80ms ease, opacity 200ms ease;
       }
       button#enter:active { transform: translateY(2px); }
       button#enter:disabled { opacity: 0.55; cursor: default; }
-      button#enter:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+      button#enter:focus-visible { outline: 3px solid var(--eyebrow); outline-offset: 3px; }
       .notes { margin-top: 22px; font-size: 13px; color: var(--muted); line-height: 1.6; }
     </style>
   </head>
   <body>
     <div id="landing" role="dialog" aria-labelledby="landing-title">
       <div class="card">
-        <div class="orb" aria-hidden="true"></div>
+        <div class="orb-wrap" aria-hidden="true"><div class="halo"></div><div class="orb"></div></div>
         <p class="eyebrow">UNMIX</p>
         <h1 id="landing-title">Pull a song apart.</h1>
         <p class="lede">
