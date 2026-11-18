@@ -65,6 +65,7 @@ import {
   makeTextPlane,
   STEM_COLORS,
   STEM_LABELS,
+  setStemLabels,
   type TextPlane,
 } from './visuals.js';
 import { ORB_WAVE_RISE, type OrbWave, WaveformViews } from './waveform.js';
@@ -474,6 +475,7 @@ export class UnmixSystem extends createSystem({
       this.engine.stop();
       this.engine.setTrack(track);
       this.track = track;
+      setStemLabels(track.info.labels);
       this.waves.setTrack(track);
 
       // Fresh mix for the new track, keeping the layout anchor.

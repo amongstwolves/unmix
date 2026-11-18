@@ -125,8 +125,13 @@ objects themselves: a muted orb loses its color, a darker one deepens.
    }
    ```
 
-   Section times are seconds from the start of the stems. Only use music whose
-   license allows modification, or your own recordings.
+   Section times are seconds from the start of the stems. An instrumental has
+   no vocals, so you can rename the four orbs with `"labels"`, for example
+   `{ "vocals": "Piano", "bass": "Guitar" }`, and put any part in any of the
+   four files. `"color"` sets the record color on the shelf tile. FLAC keeps a
+   loop gapless; MP3 and AAC add a short gap at the loop point.
+
+   Only use music whose license allows modification, or your own recordings.
 
 4. Add the track id to `public/tracks/index.json` (shelf order, left to right):
 
@@ -164,7 +169,22 @@ track (`"placeholder": true`) generates all four stems in the browser.
 
 ## Credits
 
-- Placeholder loop: generated in code, CC0.
+Music by Kevin MacLeod, used under Creative Commons Attribution 4.0
+(https://creativecommons.org/licenses/by/4.0/). Each song was changed: a short
+loop was cut from it and split into parts with Demucs (htdemucs_6s), then the
+parts were combined into four orbs.
+
+- Funkorama Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By
+  Attribution 4.0. https://creativecommons.org/licenses/by/4.0/
+- Hyperfun Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By
+  Attribution 4.0. https://creativecommons.org/licenses/by/4.0/
+- Groove Grove Kevin MacLeod (incompetech.com). Licensed under Creative Commons:
+  By Attribution 4.0. https://creativecommons.org/licenses/by/4.0/
+
+No endorsement by the artist is implied.
+
+Placeholder loop (not on the shelf; used if a stem fails to load): generated in
+code, CC0.
 
 ## Ideas for a future version
 

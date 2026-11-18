@@ -1,0 +1,50 @@
+{
+  "id": "groove-grove",
+  "title": "Groove Grove",
+  "artist": "Kevin MacLeod (incompetech.com)",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Groove Grove Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0. https://creativecommons.org/licenses/by/4.0/. Changes: a short loop, split into parts with Demucs.",
+  "source": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Groove%20Grove.mp3",
+  "bpm": 139.79,
+  "key": "",
+  "color": "#2fd27a",
+  "labels": {
+    "vocals": "Keys",
+    "drums": "Drums",
+    "bass": "Bass",
+    "other": "Other"
+  },
+  "stems": {
+    "vocals": "vocals.flac",
+    "drums": "drums.flac",
+    "bass": "bass.flac",
+    "other": "other.flac"
+  },
+  "sections": [
+    {
+      "id": "a",
+      "label": "Part A",
+      "start": 0.0,
+      "end": 10.3012
+    },
+    {
+      "id": "b",
+      "label": "Part B",
+      "start": 10.3012,
+      "end": 20.6025
+    },
+    {
+      "id": "c",
+      "label": "Part C",
+      "start": 20.6025,
+      "end": 30.9037
+    },
+    {
+      "id": "d",
+      "label": "Part D",
+      "start": 30.9037,
+      "end": 41.205
+    }
+  ]
+}

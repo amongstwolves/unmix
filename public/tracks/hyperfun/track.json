@@ -1,0 +1,50 @@
+{
+  "id": "hyperfun",
+  "title": "Hyperfun",
+  "artist": "Kevin MacLeod (incompetech.com)",
+  "license": "CC BY 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Hyperfun Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0. https://creativecommons.org/licenses/by/4.0/. Changes: a short loop, split into parts with Demucs.",
+  "source": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hyperfun.mp3",
+  "bpm": 99.77,
+  "key": "",
+  "color": "#ff5c8a",
+  "labels": {
+    "vocals": "Piano",
+    "drums": "Drums",
+    "bass": "Guitar",
+    "other": "Other"
+  },
+  "stems": {
+    "vocals": "vocals.flac",
+    "drums": "drums.flac",
+    "bass": "bass.flac",
+    "other": "other.flac"
+  },
+  "sections": [
+    {
+      "id": "a",
+      "label": "Part A",
+      "start": 0.0,
+      "end": 9.6218
+    },
+    {
+      "id": "b",
+      "label": "Part B",
+      "start": 9.6218,
+      "end": 19.2435
+    },
+    {
+      "id": "c",
+      "label": "Part C",
+      "start": 19.2435,
+      "end": 28.8653
+    },
+    {
+      "id": "d",
+      "label": "Part D",
+      "start": 28.8653,
+      "end": 38.487
+    }
+  ]
+}

@@ -26,6 +26,10 @@ export interface TrackInfo {
   sections: TrackSection[];
   /** Stem file names relative to the track folder. */
   stems?: Partial<Record<StemId, string>>;
+  /** Optional display names per part, e.g. { "vocals": "Guitar" } for an instrumental. */
+  labels?: Partial<Record<StemId, string>>;
+  /** Record color on the shelf tile. */
+  color?: string;
   /** When true, all stems are generated tones instead of files. */
   placeholder?: boolean;
 }

@@ -1,0 +1,86 @@
+[
+  {
+    "label": "Bass behind, keys in front",
+    "why": "Moving the big bass away lets the quieter keys come forward.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "bass",
+        "slot": 7
+      },
+      {
+        "type": "move",
+        "stem": "vocals",
+        "slot": 3
+      },
+      {
+        "type": "setVolume",
+        "stem": "bass",
+        "value": 0.7
+      }
+    ]
+  },
+  {
+    "label": "Solo the keys",
+    "why": "Hear the keys on their own before you build the mix back up.",
+    "actions": [
+      {
+        "type": "solo",
+        "stem": "vocals"
+      }
+    ]
+  },
+  {
+    "label": "Push the drums up",
+    "why": "The drums sit quietly in this song; bringing them close adds punch.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "drums",
+        "slot": 4
+      },
+      {
+        "type": "setVolume",
+        "stem": "drums",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "label": "Dark, rumbling bass",
+    "why": "Closing the filter on the bass turns it into a low rumble.",
+    "actions": [
+      {
+        "type": "setFilter",
+        "stem": "bass",
+        "value": 0.25
+      }
+    ]
+  },
+  {
+    "label": "Echo on the keys",
+    "why": "An echo on the keys fills the space between the notes.",
+    "actions": [
+      {
+        "type": "setEcho",
+        "stem": "vocals",
+        "value": 0.45
+      },
+      {
+        "type": "move",
+        "stem": "vocals",
+        "slot": 2
+      }
+    ]
+  },
+  {
+    "label": "Loop the second section",
+    "why": "Looping one section turns the song into a groove you can shape.",
+    "actions": [
+      {
+        "type": "loopSection",
+        "sectionId": "b"
+      }
+    ]
+  }
+]

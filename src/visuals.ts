@@ -38,6 +38,20 @@ export const STEM_LABELS: Record<StemId, string> = {
   you: 'YOU',
 };
 
+const DEFAULT_STEM_LABELS = { ...STEM_LABELS };
+
+/**
+ * A track can rename its parts (an instrumental has no vocals, so its lead
+ * part might be "GUITAR"). Missing names fall back to the defaults.
+ */
+export function setStemLabels(labels?: Partial<Record<StemId, string>>): void {
+  for (const id of Object.keys(DEFAULT_STEM_LABELS) as StemId[]) {
+    const name = labels?.[id];
+    STEM_LABELS[id] =
+      typeof name === 'string' && name.trim() ? name.trim().toUpperCase().slice(0, 10) : DEFAULT_STEM_LABELS[id];
+  }
+}
+
 export type Ink = 'light' | 'dark';
 
 function labelTexture(

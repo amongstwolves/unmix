@@ -1,0 +1,95 @@
+[
+  {
+    "label": "Piano close, drums wide",
+    "why": "Bringing the piano in front of you puts the melody in your hands.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "vocals",
+        "slot": 3
+      },
+      {
+        "type": "move",
+        "stem": "drums",
+        "slot": 0
+      },
+      {
+        "type": "move",
+        "stem": "other",
+        "slot": 7
+      }
+    ]
+  },
+  {
+    "label": "Just piano and drums",
+    "why": "Strip it back to hear the piano riff against the beat.",
+    "actions": [
+      {
+        "type": "mute",
+        "stem": "bass"
+      },
+      {
+        "type": "mute",
+        "stem": "other"
+      }
+    ]
+  },
+  {
+    "label": "Bring the guitar forward",
+    "why": "The guitar is quiet in this song; moving it close makes it heard.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "bass",
+        "slot": 4
+      },
+      {
+        "type": "setVolume",
+        "stem": "bass",
+        "value": 1
+      }
+    ]
+  },
+  {
+    "label": "Echo on the piano",
+    "why": "A tempo-synced echo makes the piano sparkle around you.",
+    "actions": [
+      {
+        "type": "setEcho",
+        "stem": "vocals",
+        "value": 0.4
+      }
+    ]
+  },
+  {
+    "label": "Muffle everything but drums",
+    "why": "Darkening the other parts makes the drums jump out.",
+    "actions": [
+      {
+        "type": "setFilter",
+        "stem": "vocals",
+        "value": 0.35
+      },
+      {
+        "type": "setFilter",
+        "stem": "other",
+        "value": 0.35
+      },
+      {
+        "type": "setFilter",
+        "stem": "bass",
+        "value": 0.35
+      }
+    ]
+  },
+  {
+    "label": "Loop the last section",
+    "why": "Repeating the end gives you a loop to arrange.",
+    "actions": [
+      {
+        "type": "loopSection",
+        "sectionId": "d"
+      }
+    ]
+  }
+]

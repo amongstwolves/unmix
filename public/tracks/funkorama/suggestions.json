@@ -1,0 +1,99 @@
+[
+  {
+    "label": "Bass up close, drums wide",
+    "why": "Pulling the bass in front of you makes the groove the star.",
+    "actions": [
+      {
+        "type": "move",
+        "stem": "bass",
+        "slot": 3
+      },
+      {
+        "type": "move",
+        "stem": "drums",
+        "slot": 0
+      },
+      {
+        "type": "move",
+        "stem": "other",
+        "slot": 7
+      }
+    ]
+  },
+  {
+    "label": "Just drums and bass",
+    "why": "Strip it to the rhythm section to hear how tight the funk is.",
+    "actions": [
+      {
+        "type": "mute",
+        "stem": "vocals"
+      },
+      {
+        "type": "mute",
+        "stem": "other"
+      }
+    ]
+  },
+  {
+    "label": "Dub echo on the lead",
+    "why": "A tempo-synced echo makes the lead line bounce around the room.",
+    "actions": [
+      {
+        "type": "setEcho",
+        "stem": "vocals",
+        "value": 0.5
+      },
+      {
+        "type": "move",
+        "stem": "vocals",
+        "slot": 5
+      }
+    ]
+  },
+  {
+    "label": "Muffled guitar far away",
+    "why": "Darkening the guitar and pushing it back leaves room for the bass.",
+    "actions": [
+      {
+        "type": "setFilter",
+        "stem": "other",
+        "value": 0.3
+      },
+      {
+        "type": "move",
+        "stem": "other",
+        "slot": 7
+      },
+      {
+        "type": "setVolume",
+        "stem": "other",
+        "value": 0.7
+      }
+    ]
+  },
+  {
+    "label": "Half-time bass",
+    "why": "Slowing just the bass gives the groove a lazy, heavy feel.",
+    "actions": [
+      {
+        "type": "halfTime",
+        "stem": "bass"
+      }
+    ]
+  },
+  {
+    "label": "Loop the opening phrase",
+    "why": "Repeating the first section turns it into a beat to play over.",
+    "actions": [
+      {
+        "type": "loopSection",
+        "sectionId": "a"
+      },
+      {
+        "type": "setEcho",
+        "stem": "drums",
+        "value": 0.2
+      }
+    ]
+  }
+]
