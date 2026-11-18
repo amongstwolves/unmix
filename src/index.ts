@@ -10,17 +10,26 @@ World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 )
-  .then((world) => {
+  .then(async (world) => {
     world.registerSystem(UnmixSystem);
 
     // The landing page doubles as the loading screen: ready once the world is.
-    if (world.xrEnabled) {
+    // Only offer Enter XR where the browser can start a mixed reality session
+    // (a Quest, or the emulator); a laptop gets a pointer to the headset instead.
+    let supported = false;
+    try {
+      supported = (await navigator.xr?.isSessionSupported('immersive-ar')) === true;
+    } catch {
+      supported = false;
+    }
+    if (world.xrEnabled && supported) {
       enter.textContent = 'Enter XR';
       enter.disabled = false;
       enter.addEventListener('click', () => world.launchXR());
     } else {
       enter.textContent = 'Open on a Meta Quest';
-      notes.textContent = 'Open this page in the Meta Quest browser to start.';
+      notes.textContent =
+        'Unmix runs in mixed reality. Open this page in the Meta Quest Browser to start.';
       notes.hidden = false;
     }
     world.visibilityState.subscribe((state) => {
