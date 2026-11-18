@@ -68,13 +68,6 @@ export class Layout {
     return this.around(angle, Math.hypot(offset, distance), 0.26 + row * 0.14, out);
   }
 
-  /** Caption between the two panel rows, centered over columns a..b. */
-  panelCaptionPosition(colA: number, colB: number, out: Vector3): Vector3 {
-    const offset = ((colA + colB) / 2 - 1.5) * 0.16;
-    const distance = 0.315;
-    return this.around(Math.atan2(offset, distance), Math.hypot(offset, distance), 0.33, out);
-  }
-
   /** Producer chips: a row of 3 at eye height, in front of the orbs. */
   chipPosition(index: number, out: Vector3): Vector3 {
     const offset = (index - 1) * 0.25; // 19 cm chips, 6 cm gaps
@@ -85,6 +78,11 @@ export class Layout {
   /** Full-track waveform strip: farther away, just above the chips. */
   stripPosition(out: Vector3): Vector3 {
     return this.around(0, 1.0, -0.27, out);
+  }
+
+  /** "Mix saved" note, just above the song sphere. */
+  toastPosition(out: Vector3): Vector3 {
+    return this.around(0, SPHERE_DISTANCE, SPHERE_DROP - SPHERE_RADIUS - 0.06, out);
   }
 
   /** The producer's one-line "why", just over the chips. */

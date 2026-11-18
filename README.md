@@ -23,20 +23,30 @@ for a Quest 3 (headset, controllers and hands), so no headset is needed.
 1. Poke a record tile to load a song into the sphere.
 2. Grab the sphere with both hands and pull them apart (or poke **Split**).
 3. Grab an orb to move a stem around you. Where it is, is where you hear it.
-4. Grab an orb or poke the name tab under it to select that stem, then use the
-   panel: Mute, Solo, Darker, Brighter, Echo, Pitch − / + (pitch also changes
-   speed; one stem at a time).
-5. Poke a producer chip to try an idea, then Keep or Undo.
+4. Grab an orb, or poke the name tab under it, to open that stem's panel:
+   Mute, Solo, Echo, Darker, Brighter, Pitch/speed − and + (pitch also changes
+   speed; one stem at a time). Poke **Done** or the tab again to close it.
+5. With no stem selected, poke **Ask producer** for three ideas. Poke one to
+   hear it, then Keep or Undo.
 6. Poke **Record** (it sits at a free spot on the orb arc) to add your own
-   sound: you hear a count-in, then it records two bars from your microphone
-   and loops them in time with the song as a fifth orb, **YOU**. Poke
-   **Re-record** to replace the take. The recording is kept for this track
-   until you load another one.
+   sound: a count-in, then two bars from your microphone, looped in time with
+   the song as a fifth orb, **YOU**. **Re-record** replaces the take. The
+   recording is kept for this track until you load another one.
 7. Hold one orb pushed into another for a moment (or poke **Mix down**) to fuse
-   them back into one song. This saves the mix; **Saved mix** brings it back.
+   them back into one song. The mix is saved ("Mix saved"); **Saved mix**
+   brings it back.
 
-The strip above the chips shows the whole track, one lane per stem, with a
+The strip above the orbs shows the whole track, one lane per stem, with a
 playhead per lane. Each orb carries its own small waveform.
+
+## Design
+
+Inspired by hardware stem players, not copied from them. Less, but better:
+only what you are doing right now is shown (the stem panel appears for a
+selected stem; producer ideas appear when asked for). Color means something:
+the stem colors are the only accents, and controls are warm neutral keys
+that travel in when pressed and rest pressed-in when on. State is shown by the
+objects themselves: a muted orb loses its color, a darker one deepens.
 
 ## How it works
 

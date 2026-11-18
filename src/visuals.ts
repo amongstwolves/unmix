@@ -7,14 +7,15 @@
 import {
   AdditiveBlending,
   BackSide,
-  BoxGeometry,
   CanvasTexture,
   Color,
+  ExtrudeGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  Shape,
   SphereGeometry,
   SRGBColorSpace,
 } from '@iwsdk/core';
@@ -37,33 +38,41 @@ export const STEM_LABELS: Record<StemId, string> = {
   you: 'YOU',
 };
 
-function labelTexture(text: string, width = 512, height = 128, bg?: string): CanvasTexture {
+export type Ink = 'light' | 'dark';
+
+function labelTexture(text: string, width = 512, height = 128, ink: Ink = 'light'): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const g = canvas.getContext('2d')!;
-  if (bg) {
-    g.fillStyle = bg;
-    g.fillRect(0, 0, width, height);
-  }
   // Shrink long text until it fits the label.
-  let size = Math.round(height * 0.5);
-  const fontFor = (px: number) => `700 ${px}px system-ui, -apple-system, sans-serif`;
+  let size = Math.round(height * 0.46);
+  const fontFor = (px: number) => `600 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   g.font = fontFor(size);
-  while (size > 12 && g.measureText(text).width > width * 0.92) {
+  while (size > 12 && g.measureText(text).width > width * 0.9) {
     size -= 2;
     g.font = fontFor(size);
   }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.lineWidth = height * 0.08;
-  g.strokeStyle = 'rgba(0,0,0,0.65)';
-  g.strokeText(text, width / 2, height / 2);
-  g.fillStyle = '#ffffff';
+  if (ink === 'dark') {
+    g.fillStyle = '#25252a';
+  } else {
+    // Light text floats over passthrough, so give it a soft shadow.
+    g.shadowColor = 'rgba(0,0,0,0.6)';
+    g.shadowBlur = height * 0.08;
+    g.fillStyle = '#ffffff';
+  }
   g.fillText(text, width / 2, height / 2);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   return texture;
+}
+
+/** Dark text on light colors, light text on dark ones. */
+function inkFor(color: Color): Ink {
+  const l = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b; // linear
+  return l > 0.18 ? 'dark' : 'light';
 }
 
 /** Parts the system animates for hover, grab, release and audio level. */
@@ -162,58 +171,131 @@ export function makeSongSphere(): GlowParts & { satellites: Mesh[] } {
 
 export interface ButtonParts {
   root: Group;
-  body: Mesh<BoxGeometry, MeshStandardMaterial>;
+  body: Mesh<ExtrudeGeometry, MeshStandardMaterial>;
   face: Mesh<PlaneGeometry, MeshBasicMaterial>;
   setLabel: (text: string) => void;
-  /** Lit-up look for toggles that are on (mute, solo, echo). */
+  /** "On" look for toggles (mute, solo, echo): sits pressed in, in color. */
   setActive: (active: boolean) => void;
+  /** Accent color: the body for accent buttons, the "on" color for neutral ones. */
   setColor: (color: string) => void;
+  /** Push the key in by `depth` meters (press travel). */
+  setTravel: (depth: number) => void;
   active: boolean;
 }
+
+/**
+ * neutral: warm light gray key, dark text (most controls)
+ * accent:  colored key (stem tabs, track tiles, Mix down)
+ * record:  red key, light text
+ * glass:   frosted translucent key (producer ideas)
+ */
+export type ButtonStyle = 'neutral' | 'accent' | 'record' | 'glass';
 
 export interface ButtonOptions {
   width?: number;
   height?: number;
   color?: string;
-  /** 0..1; below 1 lets what is behind the button show through. */
-  opacity?: number;
+  style?: ButtonStyle;
+}
+
+const NEUTRAL = new Color('#ebe7df');
+const GLASS = new Color('#f4f2ee');
+const RECORD = new Color('#d6453d');
+const KEY_DEPTH = 0.012;
+const BEVEL = 0.003;
+
+/** A rounded key: front face at z = 0, extruded backwards. */
+function keyGeometry(width: number, height: number): ExtrudeGeometry {
+  const r = Math.min(width, height) * 0.22;
+  const w = width / 2 - BEVEL;
+  const h = height / 2 - BEVEL;
+  const shape = new Shape();
+  shape.moveTo(-w + r, -h);
+  shape.lineTo(w - r, -h);
+  shape.quadraticCurveTo(w, -h, w, -h + r);
+  shape.lineTo(w, h - r);
+  shape.quadraticCurveTo(w, h, w - r, h);
+  shape.lineTo(-w + r, h);
+  shape.quadraticCurveTo(-w, h, -w, h - r);
+  shape.lineTo(-w, -h + r);
+  shape.quadraticCurveTo(-w, -h, -w + r, -h);
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: KEY_DEPTH,
+    bevelEnabled: true,
+    bevelThickness: BEVEL,
+    bevelSize: BEVEL,
+    bevelSegments: 2,
+    curveSegments: 5,
+  });
+  geometry.translate(0, 0, -KEY_DEPTH);
+  return geometry;
 }
 
 /** A poke button with a text label. Default 12 x 8 cm. */
 export function makeButton(text: string, options: ButtonOptions = {}): ButtonParts {
   const width = options.width ?? 0.12;
   const height = options.height ?? 0.08;
-  const baseColor = new Color(options.color ?? '#7c5cff');
+  const style = options.style ?? 'neutral';
+  const accent = new Color(options.color ?? '#7c5cff');
+  const base =
+    style === 'neutral' ? NEUTRAL.clone()
+    : style === 'glass' ? GLASS.clone()
+    : style === 'record' ? RECORD.clone()
+    : accent.clone();
+
   const root = new Group();
   root.name = 'button';
   const body = new Mesh(
-    new BoxGeometry(width, height, 0.02),
+    keyGeometry(width, height),
     new MeshStandardMaterial({
-      color: baseColor.clone(),
-      emissive: baseColor.clone(),
-      emissiveIntensity: 0.25,
-      roughness: 0.5,
-      transparent: (options.opacity ?? 1) < 1,
-      opacity: options.opacity ?? 1,
+      color: base.clone(),
+      emissive: base.clone(),
+      emissiveIntensity: 0.05,
+      roughness: style === 'glass' ? 0.15 : 0.6,
+      metalness: 0,
+      transparent: style === 'glass',
+      opacity: style === 'glass' ? 0.72 : 1,
     }),
   );
   root.add(body);
-  const aspect = width / height;
+
   const texHeight = 128;
-  const texWidth = Math.round(Math.min(1024, texHeight * aspect * 2.2));
+  const texWidth = Math.round(Math.min(1024, texHeight * (width / height) * 2.2));
+  let ink: Ink = inkFor(body.material.color);
+  let currentText = text;
   const face = new Mesh(
-    new PlaneGeometry(width * 0.94, (width * 0.94 * texHeight) / texWidth),
+    new PlaneGeometry(width * 0.92, (width * 0.92 * texHeight) / texWidth),
     new MeshBasicMaterial({
-      map: labelTexture(text, texWidth, texHeight),
+      map: labelTexture(text, texWidth, texHeight, ink),
       transparent: true,
       depthWrite: false,
     }),
   );
-  face.position.z = 0.0105;
+  const faceZ = BEVEL + 0.0008;
+  face.position.z = faceZ;
   face.raycast = () => {};
   root.add(face);
 
-  let currentText = text;
+  const redraw = () => {
+    face.material.map?.dispose();
+    face.material.map = labelTexture(currentText, texWidth, texHeight, ink);
+    face.material.needsUpdate = true;
+  };
+  const restyle = () => {
+    const c = body.material.color;
+    c.copy(base);
+    if (parts.active) {
+      if (style === 'neutral' || style === 'glass') c.lerp(accent, 0.8);
+      else c.lerp(WHITE, 0.35);
+    }
+    body.material.emissive.copy(c);
+    const next = inkFor(c);
+    if (next !== ink) {
+      ink = next;
+      redraw();
+    }
+  };
+
   const parts: ButtonParts = {
     root,
     body,
@@ -222,19 +304,21 @@ export function makeButton(text: string, options: ButtonOptions = {}): ButtonPar
     setLabel: (next: string) => {
       if (next === currentText) return;
       currentText = next;
-      face.material.map?.dispose();
-      face.material.map = labelTexture(next, texWidth, texHeight);
-      face.material.needsUpdate = true;
+      redraw();
     },
     setActive: (active: boolean) => {
+      if (active === parts.active) return;
       parts.active = active;
-      body.material.color.copy(baseColor);
-      if (active) body.material.color.lerp(WHITE, 0.45);
+      restyle();
     },
     setColor: (color: string) => {
-      baseColor.set(color);
-      body.material.emissive.copy(baseColor);
-      parts.setActive(parts.active);
+      accent.set(color);
+      if (style === 'accent') base.copy(accent);
+      restyle();
+    },
+    setTravel: (depth: number) => {
+      body.position.z = -depth;
+      face.position.z = faceZ - depth;
     },
   };
   return parts;

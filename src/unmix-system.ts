@@ -11,6 +11,7 @@
  */
 
 import {
+  Color,
   createSystem,
   type Entity,
   GrabSystem,
@@ -86,11 +87,12 @@ const MERGE_SECONDS = 0.6;
 const FUSE_HOLD_SECONDS = 0.4;
 const FILTER_STEP = 0.15;
 const ECHO_ON = 0.45;
-const MIXDOWN_COLOR = '#7c5cff';
 const SAVED_KEY = (trackId: string) => `unmix.savedMix.${trackId}`;
 /** Arc slots the Record button (and then the YOU orb) prefers, in order. */
 const RECORD_SLOT_ORDER = [5, 2, 7, 0, 6, 1, 3, 4];
-const RECORD_COLOR = '#d93a3a';
+const MUTED_GRAY = new Color('#7a7a80');
+/** The song sphere's violet, also used for whole-song actions. */
+const SPHERE_COLOR = '#c9b6ff';
 
 interface OrbVisual {
   parts: GlowParts;
@@ -143,7 +145,12 @@ export class UnmixSystem extends createSystem({
   private chipOffset = 0;
   private pending: { suggestion: Suggestion; before: MixState } | null = null;
   private savedMix: MixState | null = null;
-  private selected: StemId = 'vocals';
+  /** Stem the panel controls; null = no panel (browse mode). */
+  private selected: StemId | null = null;
+  private producerOpen = false;
+  private savedToastTimer = 0;
+  private toast!: Label;
+  private browse!: { ask: Button; mixdown: Button };
 
   private needsAnchor = 2; // frames to wait before reading the head pose
   private sphereEntity!: Entity;
@@ -156,12 +163,11 @@ export class UnmixSystem extends createSystem({
   private trackTiles: Button[] = [];
   private wholeRow!: { split: Button; restore: Button; tracks: Button };
   private panel!: Record<
-    'mute' | 'solo' | 'darker' | 'brighter' | 'echo' | 'pitchDown' | 'pitchUp' | 'mixdown',
+    'mute' | 'solo' | 'echo' | 'done' | 'darker' | 'brighter' | 'pitchDown' | 'pitchUp',
     Button
   >;
   private chips: Button[] = [];
   private note!: Label;
-  private pitchCaption!: Label;
   private orbRecords = new Map<StemId, OrbRecord>();
   private waves!: WaveformViews;
   /** Reused every frame for the waveform update (no per-frame allocation). */
@@ -272,42 +278,56 @@ export class UnmixSystem extends createSystem({
   private createButtons(): void {
     const L = this.layout;
     this.wholeRow = {
-      split: this.makeBtn('split-button', 'Split', 'split', (o) => L.buttonPosition(0, 3, o)),
-      restore: this.makeBtn('saved-mix-button', 'Saved mix', 'restore', (o) => L.buttonPosition(1, 3, o), { color: '#3a8f7a' }),
-      tracks: this.makeBtn('tracks-button', 'Tracks', 'tracks', (o) => L.buttonPosition(2, 3, o), { color: '#555a66' }),
+      split: this.makeBtn('split-button', 'Split', 'split', (o) => L.buttonPosition(0, 3, o), { style: 'accent', color: SPHERE_COLOR }),
+      restore: this.makeBtn('saved-mix-button', 'Saved mix', 'restore', (o) => L.buttonPosition(1, 3, o)),
+      tracks: this.makeBtn('tracks-button', 'Tracks', 'tracks', (o) => L.buttonPosition(2, 3, o)),
     };
     const small = { width: 0.1, height: 0.08 };
     const at = (col: number, row: number) => (o: Vector3) => L.panelPosition(col, row, o);
+    // Shown only while a stem is selected: toggles on top, shaping below.
     this.panel = {
       mute: this.makeBtn('mute-button', 'Mute', 'mute', at(0, 0), small),
       solo: this.makeBtn('solo-button', 'Solo', 'solo', at(1, 0), small),
-      darker: this.makeBtn('darker-button', 'Darker', 'darker', at(2, 0), small),
-      brighter: this.makeBtn('brighter-button', 'Brighter', 'brighter', at(3, 0), small),
-      echo: this.makeBtn('echo-button', 'Echo', 'echo', at(0, 1), small),
-      pitchDown: this.makeBtn('pitch-down-button', 'Pitch −', 'pitchDown', at(1, 1), small),
-      pitchUp: this.makeBtn('pitch-up-button', 'Pitch +', 'pitchUp', at(2, 1), small),
-      mixdown: this.makeBtn('mixdown-button', 'Mix down', 'mixdown', at(3, 1), { ...small, color: MIXDOWN_COLOR }),
+      echo: this.makeBtn('echo-button', 'Echo', 'echo', at(2, 0), small),
+      done: this.makeBtn('done-button', 'Done', 'done', at(3, 0), small),
+      darker: this.makeBtn('darker-button', 'Darker', 'darker', at(0, 1), small),
+      brighter: this.makeBtn('brighter-button', 'Brighter', 'brighter', at(1, 1), small),
+      // Pitch uses playback rate, so speed changes too: say so on the keys.
+      pitchDown: this.makeBtn('pitch-down-button', 'Pitch/speed −', 'pitchDown', at(2, 1), small),
+      pitchUp: this.makeBtn('pitch-up-button', 'Pitch/speed +', 'pitchUp', at(3, 1), small),
+    };
+    // Shown while nothing is selected.
+    this.browse = {
+      ask: this.makeBtn('ask-button', 'Ask producer', 'ask', at(1, 0), {
+        width: 0.12,
+        height: 0.08,
+        color: '#b4aea4', // "on" = a darker warm gray; color is kept for stems
+      }),
+      mixdown: this.makeBtn('mixdown-button', 'Mix down', 'mixdown', at(2, 0), {
+        width: 0.12,
+        height: 0.08,
+        style: 'accent',
+        color: SPHERE_COLOR,
+      }),
     };
     for (let i = 0; i < 3; i += 1) {
       this.chips.push(
         this.makeBtn(`chip-${i}`, '…', `chip:${i}`, (o) => L.chipPosition(i, o), {
           width: 0.19,
           height: 0.08,
-          color: '#2b2f3a',
-          opacity: 0.8,
+          style: 'glass',
+          color: '#c9b6ff',
         }),
       );
     }
+    this.toast = this.makeLabel('Mix saved', 0.2, 0.035, (o) => L.toastPosition(o));
     this.note = this.makeLabel('', 0.62, 0.035, (o) => L.notePosition(o));
     // Placed at a free arc slot in refreshUi(); the YOU orb appears there.
     this.recordButton = this.makeBtn('record-button', 'Record', 'record', null, {
       width: 0.1,
       height: 0.08,
-      color: RECORD_COLOR,
+      style: 'record',
     });
-    this.pitchCaption = this.makeLabel('PITCH + SPEED', 0.24, 0.022, (o) =>
-      L.panelCaptionPosition(1, 2, o),
-    );
   }
 
   private async loadShelf(): Promise<void> {
@@ -324,7 +344,7 @@ export class UnmixSystem extends createSystem({
         title.length > 14 ? `${title.slice(0, 13)}…` : title,
         `track:${id}`,
         (o) => this.layout.buttonPosition(i, count, o),
-        { color: '#c2410c' },
+        { style: 'accent', color: SPHERE_COLOR },
       );
       this.trackTiles.push(tile);
     });
@@ -367,7 +387,9 @@ export class UnmixSystem extends createSystem({
       case 'split': this.split(); break;
       case 'restore': this.restoreSaved(); break;
       case 'tracks': this.goIdle(); break;
-      case 'select': this.selected = arg as StemId; break;
+      case 'select': this.selected = this.selected === arg ? null : (arg as StemId); break;
+      case 'done': this.selected = null; break;
+      case 'ask': this.producerOpen = !this.producerOpen; break;
       case 'mixdown': this.mixDown(); break;
       case 'chip': this.onChip(Number(arg)); break;
       case 'record': void this.startRecording(); break;
@@ -379,6 +401,7 @@ export class UnmixSystem extends createSystem({
   }
 
   private onStemControl(verb: string): void {
+    if (!this.selected) return;
     const stem = this.state.stems[this.selected];
     switch (verb) {
       case 'mute': toggleMute(this.state, this.selected); break;
@@ -419,7 +442,8 @@ export class UnmixSystem extends createSystem({
       this.recState = 'none';
       this.state.trackId = track.info.id;
       this.state.loopSectionId = null;
-      this.selected = 'vocals';
+      this.selected = null;
+      this.producerOpen = false;
 
       const sectionIds = track.info.sections.map((s) => s.id);
       this.suggestions = (await loadSuggestionsFile(trackId))
@@ -490,6 +514,7 @@ export class UnmixSystem extends createSystem({
     const tab = this.makeBtn(`tab-${stem}`, STEM_LABELS[stem], `select:${stem}`, null, {
       width: 0.1,
       height: 0.08,
+      style: 'accent',
       color: STEM_COLORS[stem],
     });
     this.setShown(tab, true);
@@ -692,6 +717,7 @@ export class UnmixSystem extends createSystem({
     const snap = snapshotMix(this.state);
     snap.phase = 'whole';
     this.savedMix = snap;
+    this.savedToastTimer = 4;
     try {
       localStorage.setItem(SAVED_KEY(this.state.trackId), JSON.stringify(snap));
     } catch {
@@ -750,12 +776,14 @@ export class UnmixSystem extends createSystem({
     if (!this.pending) return;
     this.pending = null;
     this.chipOffset += 3;
+    this.producerOpen = false; // calm again; Ask for three fresh ideas
   }
 
   private undoSuggestion(): void {
     if (!this.pending) return;
     this.copyMix(this.pending.before);
     this.pending = null;
+    this.producerOpen = false;
   }
 
   // ================================================================ UI state
@@ -795,19 +823,23 @@ export class UnmixSystem extends createSystem({
     this.setShown(this.wholeRow.restore, phase === 'whole' && this.savedMix !== null);
     this.setShown(this.wholeRow.tracks, phase === 'whole' && this.trackIds.length > 1);
 
-    const color = STEM_COLORS[this.selected];
-    const stem = this.state.stems[this.selected];
-    for (const [key, button] of Object.entries(this.panel)) {
-      this.setShown(button, split);
-      if (key !== 'mixdown') button.parts.setColor(color);
+    // Panel only for a selected stem; otherwise the calm browse row.
+    if (this.selected && !this.orbRecords.has(this.selected)) this.selected = null;
+    const sel = split ? this.selected : null;
+    for (const button of Object.values(this.panel)) this.setShown(button, sel !== null);
+    this.setShown(this.browse.ask, split && sel === null && this.suggestions.length > 0);
+    this.setShown(this.browse.mixdown, split && sel === null);
+    this.browse.ask.parts.setLabel(this.producerOpen || this.pending ? 'Hide ideas' : 'Ask producer');
+    this.browse.ask.parts.setActive(this.producerOpen || this.pending !== null);
+    if (sel) {
+      const stem = this.state.stems[sel];
+      for (const [key, button] of Object.entries(this.panel)) {
+        if (key !== 'done') button.parts.setColor(STEM_COLORS[sel]);
+      }
+      this.panel.mute.parts.setActive(stem.muted);
+      this.panel.solo.parts.setActive(stem.soloed);
+      this.panel.echo.parts.setActive(stem.echo > 0);
     }
-    this.panel.mute.parts.setActive(stem.muted);
-    this.panel.solo.parts.setActive(stem.soloed);
-    this.panel.echo.parts.setActive(stem.echo > 0);
-    this.pitchCaption.text.setText(
-      stem.pitch === 0 ? 'PITCH + SPEED' : `PITCH + SPEED  ${stem.pitch > 0 ? '+' : ''}${stem.pitch}`,
-    );
-    this.pitchCaption.entity.object3D!.visible = split;
 
     for (const [id, { tab }] of this.orbRecords) {
       const s = this.state.stems[id];
@@ -828,7 +860,8 @@ export class UnmixSystem extends createSystem({
     this.recordButton.parts.setLabel(this.recordLabel());
     this.recordButton.parts.setActive(recBusy);
 
-    const hasChips = split && this.suggestions.length > 0;
+    if (this.pending) this.producerOpen = true;
+    const hasChips = split && this.suggestions.length > 0 && this.producerOpen;
     this.chips.forEach((chip, i) => this.setShown(chip, hasChips));
     this.note.entity.object3D!.visible = hasChips;
     if (hasChips) {
@@ -846,7 +879,7 @@ export class UnmixSystem extends createSystem({
           this.setAction(chip, `chip:${i}`);
           chip.parts.setLabel(s.label);
         });
-        this.note.text.setText('Producer ideas: poke one to try it');
+        this.note.text.setText('Poke an idea to hear it. Keep it or undo it.');
       }
       this.chips[0].parts.setActive(this.pending !== null);
     }
@@ -859,6 +892,7 @@ export class UnmixSystem extends createSystem({
       ...this.trackTiles,
       ...Object.values(this.wholeRow),
       ...Object.values(this.panel),
+      ...Object.values(this.browse),
       ...this.chips,
     ];
     for (const b of all) {
@@ -868,7 +902,7 @@ export class UnmixSystem extends createSystem({
     }
     this.layout.stripPosition(this.waves.strip.position);
     this.faceHead(this.waves.strip);
-    for (const label of [this.note, this.pitchCaption]) {
+    for (const label of [this.note, this.toast]) {
       const root = label.entity.object3D!;
       label.place(root.position);
       this.faceHead(root);
@@ -900,6 +934,13 @@ export class UnmixSystem extends createSystem({
     this.player.gripSpaces.left.getWorldPosition(this.leftHand);
     this.player.gripSpaces.right.getWorldPosition(this.rightHand);
 
+    if (this.savedToastTimer > 0) {
+      this.savedToastTimer -= delta;
+      const root = this.toast.entity.object3D!;
+      root.visible = this.savedToastTimer > 0 && this.state.phase === 'whole';
+      // Fade out over the last half second.
+      (this.toast.text.mesh.material).opacity = Math.min(1, this.savedToastTimer * 2);
+    }
     if (this.recState === 'countin') {
       // Live count-in numbers, then "Recording" until the take is in.
       this.recordButton.parts.setLabel(this.recordLabel());
@@ -1021,6 +1062,10 @@ export class UnmixSystem extends createSystem({
       const level = this.engine.getLevel(stem);
       const { core, glow } = visual.parts;
       const shade = audible ? 0.45 + 0.55 * s.filter : 0.08;
+      // Muted stems lose their color; darker filter settings deepen it.
+      core.material.color.copy(visual.parts.baseColor);
+      if (!audible) core.material.color.lerp(MUTED_GRAY, 0.85);
+      else core.material.color.multiplyScalar(0.55 + 0.45 * s.filter);
       core.material.emissiveIntensity =
         (0.4 + level * 2) * shade + (near ? 0.4 : 0) + (held ? 0.6 : 0);
       glow.material.opacity =
@@ -1080,11 +1125,17 @@ export class UnmixSystem extends createSystem({
       if (!button) continue;
       const hovered = entity.hasComponent(Hovered);
       const pressed = entity.hasComponent(Pressed);
-      const target = pressed ? 0.92 : hovered ? 1.08 : 1;
+      // Keys travel in when pressed and rest slightly in when on.
+      const travel = pressed ? 0.007 : button.parts.active ? 0.004 : 0;
+      const userData = root.userData as { travel?: number };
+      const t0 = userData.travel ?? 0;
+      const t1 = t0 + (travel - t0) * Math.min(1, delta * 20);
+      userData.travel = t1;
+      button.parts.setTravel(t1);
+      const target = hovered && !pressed ? 1.04 : 1;
       const s0 = root.scale.x;
       root.scale.setScalar(s0 + (target - s0) * Math.min(1, delta * 15));
-      button.parts.body.material.emissiveIntensity =
-        pressed ? 0.9 : hovered ? 0.55 : button.parts.active ? 0.5 : 0.25;
+      button.parts.body.material.emissiveIntensity = pressed ? 0.35 : hovered ? 0.22 : 0.05;
     }
   }
 }
