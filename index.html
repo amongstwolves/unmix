@@ -68,6 +68,34 @@
         box-shadow: 0 0 60px 10px var(--orb-glow);
         animation: breathe 3.2s ease-in-out infinite;
       }
+      /* On hover the orb itself turns rainbow: a slowly turning band of the
+         stem colors inside it, under a highlight and edge shade so it still
+         reads as a glowing sphere. */
+      .orb { overflow: hidden; }
+      .orb::before, .orb::after {
+        content: ""; position: absolute; border-radius: 50%; pointer-events: none;
+      }
+      .orb::before {
+        inset: -25%;
+        background: conic-gradient(from 90deg, #ff5c8a, #ffb020, #2fd27a, #3d7bff, #c9b6ff, #ff5c8a);
+        filter: blur(9px) saturate(1.2);
+        opacity: 0;
+        transition: opacity 450ms ease;
+        animation: spin 5s linear infinite reverse;
+      }
+      .orb::after {
+        inset: 0;
+        background:
+          radial-gradient(circle at 34% 28%, rgba(255,255,255,0.95), rgba(255,255,255,0) 42%),
+          radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 58%, rgba(40,20,90,0.35) 100%);
+        opacity: 0;
+        transition: opacity 450ms ease;
+      }
+      #landing:has(#enter:hover:not(:disabled)) .orb::before,
+      #landing:has(#enter:focus-visible) .orb::before { opacity: 0.9; }
+      #landing:has(#enter:hover:not(:disabled)) .orb::after,
+      #landing:has(#enter:focus-visible) .orb::after { opacity: 1; }
+
       /* Rainbow halo in the stem colors, faded in while Enter XR is hovered. */
       .halo {
         position: absolute; inset: -22px; z-index: 0; border-radius: 50%;
@@ -108,7 +136,7 @@
       @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 80px 18px var(--orb-glow-peak); } }
       @keyframes spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) {
-        .orb, .halo { animation: none; }
+        .orb, .halo, .orb::before { animation: none; }
       }
 
       .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--eyebrow); margin: 0 0 10px; }
