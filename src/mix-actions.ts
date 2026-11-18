@@ -3,7 +3,7 @@
  * hand. Poke buttons and the AI producer both go through these, so the
  * producer can never do anything a person could not.
  *
- * Also validates producer suggestions against the contract in CLAUDE.md.
+ * Also validates AI producer suggestions: exactly the allowed actions, in range.
  */
 
 import { ALL_STEMS, type MixState, STEM_IDS, type StemId } from './mix-state.js';
