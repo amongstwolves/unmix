@@ -6,7 +6,21 @@ Remix by moving sound through space.
 A hands-first WebXR stem player built on Meta's Immersive Web SDK (IWSDK) for the
 Meta VR Start Developer Competition 2026.
 
-## Run it
+## Try it on a Meta Quest
+
+Live at **https://amongstwolves.github.io/unmix/**. It's a WebXR website, so
+nothing to install.
+
+1. Turn on hand tracking: Settings → Movement Tracking → Hand Tracking.
+2. Open the link in the **Meta Quest Browser** and press **Enter XR**.
+3. Put the controllers down. Everything works with your hands, seated.
+4. Headphones help you hear where each part sits. The browser asks for the
+   microphone the first time you press **Record**.
+
+On a computer the page shows the landing screen only; to try it without a
+headset, run it locally (below).
+
+## Run it locally
 
 Needs Node.js 20.19+ and Chrome.
 
