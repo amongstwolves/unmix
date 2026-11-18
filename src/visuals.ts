@@ -40,11 +40,32 @@ export const STEM_LABELS: Record<StemId, string> = {
 
 export type Ink = 'light' | 'dark';
 
-function labelTexture(text: string, width = 512, height = 128, ink: Ink = 'light'): CanvasTexture {
+function labelTexture(
+  text: string,
+  width = 512,
+  height = 128,
+  ink: Ink = 'light',
+  pill?: string,
+): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const g = canvas.getContext('2d')!;
+  if (pill) {
+    // A soft rounded backing so text stays readable over a bright room.
+    g.font = `600 ${Math.round(height * 0.46)}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const textWidth = Math.min(width, g.measureText(text).width + height * 1.1);
+    const x = (width - textWidth) / 2;
+    const r = height / 2;
+    g.fillStyle = pill;
+    g.beginPath();
+    g.moveTo(x + r, 0);
+    g.lineTo(x + textWidth - r, 0);
+    g.arc(x + textWidth - r, r, r, -Math.PI / 2, Math.PI / 2);
+    g.lineTo(x + r, height);
+    g.arc(x + r, r, r, Math.PI / 2, (3 * Math.PI) / 2);
+    g.fill();
+  }
   // Shrink long text until it fits the label.
   let size = Math.round(height * 0.46);
   const fontFor = (px: number) => `600 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
@@ -331,14 +352,19 @@ export interface TextPlane {
   setText: (text: string) => void;
 }
 
-/** A flat, non-interactive line of text. */
-export function makeTextPlane(text: string, width: number, height: number): TextPlane {
+/** A flat, non-interactive line of text, optionally on a dark pill. */
+export function makeTextPlane(
+  text: string,
+  width: number,
+  height: number,
+  pill?: string,
+): TextPlane {
   const texHeight = 96;
   const texWidth = Math.round(Math.min(2048, (texHeight * width) / height));
   const mesh = new Mesh(
     new PlaneGeometry(width, height),
     new MeshBasicMaterial({
-      map: labelTexture(text, texWidth, texHeight),
+      map: labelTexture(text, texWidth, texHeight, 'light', pill),
       transparent: true,
       depthWrite: false,
     }),
@@ -351,7 +377,7 @@ export function makeTextPlane(text: string, width: number, height: number): Text
       if (next === current) return;
       current = next;
       mesh.material.map?.dispose();
-      mesh.material.map = labelTexture(next, texWidth, texHeight);
+      mesh.material.map = labelTexture(next, texWidth, texHeight, 'light', pill);
       mesh.material.needsUpdate = true;
     },
   };

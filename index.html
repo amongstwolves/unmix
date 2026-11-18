@@ -1,15 +1,80 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
+    <meta name="description" content="Pull a song apart with your bare hands. Place each part in the room around you." />
     <link rel="icon" href="data:," />
-    <title>unmix</title>
+    <title>Unmix</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0e0d12;
+        --ink: #f4f2ee;
+        --muted: #a9a5b3;
+        --key: #ebe7df;
+        --key-ink: #25252a;
+        --glow: #c9b6ff;
+      }
+      html, body { margin: 0; height: 100%; background: var(--bg); }
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+
+      /* Landing page, also the loading screen. Hidden while in XR. */
+      #landing {
+        position: fixed; inset: 0; z-index: 10;
+        display: grid; place-items: center; padding: 24px;
+        background:
+          radial-gradient(circle at 50% 42%, rgba(201, 182, 255, 0.28), rgba(201, 182, 255, 0) 38%),
+          radial-gradient(circle at 38% 36%, rgba(255, 92, 138, 0.10), rgba(0,0,0,0) 30%),
+          radial-gradient(circle at 63% 48%, rgba(61, 123, 255, 0.10), rgba(0,0,0,0) 30%),
+          var(--bg);
+        transition: opacity 300ms ease;
+      }
+      #landing.hidden { opacity: 0; pointer-events: none; }
+      .card { max-width: 440px; text-align: center; }
+      .orb {
+        width: 96px; height: 96px; margin: 0 auto 28px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff, var(--glow) 55%, #7c5cff 100%);
+        box-shadow: 0 0 60px 10px rgba(201, 182, 255, 0.45);
+        animation: breathe 3.2s ease-in-out infinite;
+      }
+      @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 80px 18px rgba(201,182,255,0.55); } }
+      @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
+      .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--glow); margin: 0 0 10px; }
+      h1 { font-size: clamp(32px, 7vw, 48px); line-height: 1.05; margin: 0 0 14px; font-weight: 700; letter-spacing: -0.01em; }
+      p.lede { font-size: 17px; line-height: 1.5; color: var(--muted); margin: 0 0 28px; }
+      button#enter {
+        font: inherit; font-size: 17px; font-weight: 600; cursor: pointer;
+        padding: 14px 34px; border: 0; border-radius: 999px;
+        background: var(--key); color: var(--key-ink);
+        box-shadow: 0 2px 0 rgba(0,0,0,0.35), 0 8px 24px rgba(0,0,0,0.35);
+        transition: transform 80ms ease, opacity 200ms ease;
+      }
+      button#enter:active { transform: translateY(2px); }
+      button#enter:disabled { opacity: 0.55; cursor: default; }
+      button#enter:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+      .notes { margin-top: 22px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+      .fine { margin-top: 18px; font-size: 11px; color: #6f6b78; }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body>
+    <div id="landing" role="dialog" aria-labelledby="landing-title">
+      <div class="card">
+        <div class="orb" aria-hidden="true"></div>
+        <p class="eyebrow">UNMIX</p>
+        <h1 id="landing-title">Pull a song apart.</h1>
+        <p class="lede">
+          Grab a glowing song with both hands, pull it into vocals, drums, bass and
+          the rest, and place each part in the room around you.
+        </p>
+        <button id="enter" type="button" disabled>Loading…</button>
+        <div class="notes" id="notes">Seated · hands only · headphones help</div>
+        <div class="fine">Not affiliated with Teenage Engineering.</div>
+      </div>
+    </div>
     <div id="scene-container"></div>
     <script type="module" src="/src/index.ts"></script>
   </body>

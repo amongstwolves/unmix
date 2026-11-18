@@ -91,6 +91,8 @@ const SAVED_KEY = (trackId: string) => `unmix.savedMix.${trackId}`;
 /** Arc slots the Record button (and then the YOU orb) prefers, in order. */
 const RECORD_SLOT_ORDER = [5, 2, 7, 0, 6, 1, 3, 4];
 const MUTED_GRAY = new Color('#7a7a80');
+/** Dark, soft backing for hints and notes over a bright passthrough room. */
+const HINT_PILL = 'rgba(14, 13, 18, 0.62)';
 /** The song sphere's violet, also used for whole-song actions. */
 const SPHERE_COLOR = '#c9b6ff';
 
@@ -150,6 +152,9 @@ export class UnmixSystem extends createSystem({
   private producerOpen = false;
   private savedToastTimer = 0;
   private toast!: Label;
+  private hint!: Label;
+  /** First-time steps done this session (the hint line moves on as they are). */
+  private learned = { played: false, split: false, moved: false, fused: false };
   private browse!: { ask: Button; mixdown: Button };
 
   private needsAnchor = 2; // frames to wait before reading the head pose
@@ -268,8 +273,14 @@ export class UnmixSystem extends createSystem({
     return button;
   }
 
-  private makeLabel(text: string, width: number, height: number, place: Label['place']): Label {
-    const plane = makeTextPlane(text, width, height);
+  private makeLabel(
+    text: string,
+    width: number,
+    height: number,
+    place: Label['place'],
+    pill?: string,
+  ): Label {
+    const plane = makeTextPlane(text, width, height, pill);
     const entity = this.world.createTransformEntity(plane.mesh);
     plane.mesh.visible = false;
     return { entity, text: plane, place };
@@ -320,7 +331,9 @@ export class UnmixSystem extends createSystem({
         }),
       );
     }
-    this.toast = this.makeLabel('Mix saved', 0.2, 0.035, (o) => L.toastPosition(o));
+    this.toast = this.makeLabel('Mix saved', 0.2, 0.035, (o) => L.toastPosition(o), HINT_PILL);
+    // One short, verb-first hint at a time; it moves on once you've done it.
+    this.hint = this.makeLabel('', 0.5, 0.036, (o) => L.toastPosition(o), HINT_PILL);
     this.note = this.makeLabel('', 0.62, 0.035, (o) => L.notePosition(o));
     // Placed at a free arc slot in refreshUi(); the YOU orb appears there.
     this.recordButton = this.makeBtn('record-button', 'Record', 'record', null, {
@@ -341,7 +354,7 @@ export class UnmixSystem extends createSystem({
       const title = info?.title ?? id;
       const tile = this.makeBtn(
         `track-tile-${id}`,
-        title.length > 14 ? `${title.slice(0, 13)}…` : title,
+        title.length > 24 ? `${title.slice(0, 23)}…` : title,
         `track:${id}`,
         (o) => this.layout.buttonPosition(i, count, o),
         { style: 'accent', color: SPHERE_COLOR },
@@ -456,12 +469,14 @@ export class UnmixSystem extends createSystem({
       this.engine.play();
       this.engine.applyMix(this.state);
       this.state.phase = 'whole';
+      this.learned.played = true;
       this.showSphere();
       console.info(`[unmix] playing "${track.info.title}" (${this.suggestions.length} producer ideas)`);
     } catch (error) {
       console.error('[unmix] track failed to load', error);
     } finally {
-      tile?.parts.setLabel(this.track?.info.id === trackId ? (this.track.info.title.slice(0, 14)) : trackId);
+      const title = this.track?.info.id === trackId ? this.track.info.title : trackId;
+      tile?.parts.setLabel(title.length > 24 ? `${title.slice(0, 23)}…` : title);
       this.loadingTrack = false;
       this.refreshUi();
     }
@@ -497,6 +512,7 @@ export class UnmixSystem extends createSystem({
     }
 
     this.state.phase = 'split';
+    this.learned.split = true;
     this.engine.burst();
     this.refreshUi();
   }
@@ -637,6 +653,7 @@ export class UnmixSystem extends createSystem({
     if (this.pending) this.keepSuggestion();
     // Set first: releasing the orbs below must not re-place them.
     this.mergeTimer = MERGE_SECONDS;
+    this.learned.fused = true;
     for (const { orb, tab } of this.orbRecords.values()) {
       this.grab.forceRelease(orb);
       if (orb.hasComponent(OneHandGrabbable)) orb.removeComponent(OneHandGrabbable);
@@ -705,6 +722,7 @@ export class UnmixSystem extends createSystem({
       this.layout.slotPosition(slot, this.v1);
     }
     s.position = [this.v1.x, this.v1.y, this.v1.z];
+    this.learned.moved = true;
     (root.userData.visual as OrbVisual).pulse = 1;
     this.engine.click(0.9);
     this.refreshUi();
@@ -860,6 +878,8 @@ export class UnmixSystem extends createSystem({
     this.recordButton.parts.setLabel(this.recordLabel());
     this.recordButton.parts.setActive(recBusy);
 
+    this.updateHint(split);
+
     if (this.pending) this.producerOpen = true;
     const hasChips = split && this.suggestions.length > 0 && this.producerOpen;
     this.chips.forEach((chip, i) => this.setShown(chip, hasChips));
@@ -883,6 +903,32 @@ export class UnmixSystem extends createSystem({
       }
       this.chips[0].parts.setActive(this.pending !== null);
     }
+  }
+
+  /** The single first-time hint for where the user is right now, if any. */
+  private updateHint(split: boolean): void {
+    const L = this.learned;
+    const phase = this.state.phase;
+    let text = '';
+    let nearSphere = true;
+    if (phase === 'idle' && !L.played) text = 'Poke a track to play it';
+    else if (phase === 'whole' && !L.split) text = 'Grab the sphere with both hands and pull apart';
+    else if (split && !L.moved) {
+      text = 'Grab an orb and move it. You hear it where it is.';
+      nearSphere = false;
+    } else if (split && !L.fused && this.selected === null) {
+      text = 'Hold two orbs together to mix back down';
+      nearSphere = false;
+    }
+    const flat = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+    const show = text !== '' && !flat && !(split && this.producerOpen);
+    const root = this.hint.entity.object3D!;
+    root.visible = show;
+    if (!show) return;
+    this.hint.text.setText(text);
+    if (nearSphere) this.layout.toastPosition(root.position);
+    else this.layout.notePosition(root.position);
+    this.faceHead(root);
   }
 
   /** Put the fixed UI where the layout says, facing the user. */
@@ -925,6 +971,7 @@ export class UnmixSystem extends createSystem({
     if (this.needsAnchor > 0 && --this.needsAnchor === 0 && this.state.phase !== 'split') {
       this.layout.anchor(this.headPos, this.headFwd);
       this.placeAll();
+      this.refreshUi();
     }
     this.engine.setListener(
       this.headPos.x, this.headPos.y, this.headPos.z,
@@ -955,7 +1002,9 @@ export class UnmixSystem extends createSystem({
   }
 
   private readHead(): void {
-    const head = this.player.head;
+    // In the flat (non-XR) view the camera is the viewer; in XR it's the head.
+    const flat = this.world.visibilityState.peek() === VisibilityState.NonImmersive;
+    const head = flat ? this.world.camera : this.player.head;
     head.updateWorldMatrix(true, false);
     const e = head.matrixWorld.elements;
     this.headPos.set(e[12], e[13], e[14]);
