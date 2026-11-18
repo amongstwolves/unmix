@@ -147,3 +147,20 @@ track (`"placeholder": true`) generates all four stems in the browser.
 ## Credits
 
 - Placeholder loop: generated in code, CC0.
+
+## Ideas for a future version
+
+Not planned for the competition build; kept here so they are not lost.
+
+- **Hardware synths and controllers (e.g. the M-VAVE FM-1).** Today a synth can
+  already join the mix by playing it into **Record**. Later: Web MIDI so a
+  controller's knobs set stem volume or filter alongside your hands; MIDI clock
+  out so a hardware sequencer plays in time with the song; USB audio in for a
+  cleaner take than the microphone. First check that the Quest browser supports
+  Web MIDI (a small test page on the headset), since that is unconfirmed.
+- **Live AI producer.** A small relay (Cloudflare Worker) holding the API key,
+  asking a model for three suggestions in the same validated format as
+  `suggestions.json`, falling back to the precomputed ones.
+- **Pinch-drag shaping gestures** for the filter ring, pitch handle and echo
+  tail, on top of the existing poke buttons.
+- **Upload your own sound** from the page before entering XR, as a fifth orb.
