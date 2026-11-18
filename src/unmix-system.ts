@@ -513,10 +513,16 @@ export class UnmixSystem extends createSystem({
     this.recMessage = null;
     this.refreshUi();
     try {
-      await this.recorder.prepare(this.engine.beat);
+      // A permission prompt can hide behind the immersive view; don't wait forever.
+      await Promise.race([
+        this.recorder.prepare(this.engine.beat),
+        new Promise((_, reject) => setTimeout(() => reject('timeout'), 15000)),
+      ]);
     } catch (error) {
       this.recState = 'none';
-      this.recMessage = (error as MicError) === 'denied' ? 'Mic blocked' : 'No mic';
+      this.recMessage =
+        (error as MicError | 'timeout') === 'denied' ? 'Mic blocked'
+        : error === 'timeout' ? 'Allow mic' : 'No mic';
       console.warn('[unmix] microphone not available:', error);
       this.refreshUi();
       return;
