@@ -85,6 +85,26 @@
       #landing:has(#enter:focus-visible) .halo {
         opacity: 0.85;
       }
+      /* Dark mode only: the halo glows like light (screen blend), breathes with
+         the orb, and the orb's violet glow steps back so the rainbow leads. */
+      @media (prefers-color-scheme: dark) {
+        .halo {
+          inset: -28px;
+          mix-blend-mode: screen;
+          filter: blur(26px) saturate(1.35);
+          animation: spin 6s linear infinite, halo-breathe 2.4s ease-in-out infinite;
+        }
+        #landing:has(#enter:hover:not(:disabled)),
+        #landing:has(#enter:focus-visible) {
+          --orb-glow: rgba(255, 255, 255, 0.16);
+          --orb-glow-peak: rgba(255, 255, 255, 0.26);
+        }
+        #landing:has(#enter:hover:not(:disabled)) .halo,
+        #landing:has(#enter:focus-visible) .halo {
+          opacity: 0.9;
+        }
+      }
+      @keyframes halo-breathe { 50% { filter: blur(32px) saturate(1.5); } }
       @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 80px 18px var(--orb-glow-peak); } }
       @keyframes spin { to { transform: rotate(360deg); } }
       @media (prefers-reduced-motion: reduce) {
